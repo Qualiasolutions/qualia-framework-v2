@@ -12,7 +12,7 @@ Build one thing properly. Fresh builder context, atomic commit, but no phase pla
 `/qualia-task {description}` — build it directly
 
 ## When to Use
-- Too big for a quick fix, too small for a full phase
+- One feature, 1-5 files, clear scope, 1-3 hours of work
 - Adding a single feature, component, API route, or integration
 - Refactoring one module
 - Building something specific someone asked for
@@ -29,12 +29,12 @@ Then use AskUserQuestion:
 question: "How complex is this task?"
 header: "Scope"
 options:
-  - label: "Small (30min-1hr)"
+  - label: "Small (1-2hrs)"
     description: "Single file or component, straightforward implementation"
-  - label: "Medium (1-3hrs)"
+  - label: "Medium (2-3hrs)"
     description: "Multiple files, some integration work, needs testing"
   - label: "Large (3hrs+)"
-    description: "Significant feature, multiple components, consider /qualia-plan instead"
+    description: "Significant feature, multiple components — use /qualia-plan instead"
 ```
 
 If "Large" — suggest `/qualia-plan` instead. Ask if they want to proceed anyway.

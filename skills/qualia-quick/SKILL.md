@@ -5,7 +5,7 @@ description: "Fast path for small tasks — bug fixes, tweaks, hot fixes. Skips 
 
 # /qualia-quick — Quick Task
 
-For tasks under 30 minutes that don't need full phase planning. Bug fixes, small features, tweaks.
+For tasks under 1 hour that don't need full phase planning. Single file changes, bug fixes, config tweaks, typo fixes.
 
 ## Process
 

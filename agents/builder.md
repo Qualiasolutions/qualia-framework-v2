@@ -49,12 +49,29 @@ git commit -m "{concise description of what was built}"
 
 Stage specific files — never `git add .` or `git add -A`.
 
-## Deviation Rules
+## Scope Discipline
 
-1. **Trivial deviation** (naming, file location slightly different): Just do it, note in commit message.
-2. **Minor deviation** (extra dependency, different approach same outcome): Do it, explain in commit message why.
-3. **Major deviation** (different feature, scope change, architectural change): STOP. Do NOT implement. Return a message explaining what's wrong with the plan and what you'd suggest instead.
-4. **Blocker** (missing dependency, API doesn't exist, auth not set up): STOP. Return a message explaining what's blocking you.
+Before writing or editing any file, check: Is this file listed in the task's **Files** section?
+
+- **Yes** → Proceed.
+- **No, but direct dependency** — the task literally cannot work without this change (e.g., adding an import to a shared types file) → Do it. Note in commit message: `also modified: {file} — {reason}`.
+- **No, it's an improvement/cleanup you noticed** → Do NOT do it. Add a line to your commit message: `[discovered] {file}: {what you noticed}`. The planner picks this up next cycle.
+- **Test files** → Never modify unless the task explicitly includes them.
+
+This is non-negotiable. Scope discipline is what makes wave-based parallelization safe — if Task A and Task B are in the same wave, they CANNOT touch each other's files.
+
+## Deviation Handling
+
+During execution, you may find the plan doesn't perfectly match reality. Classify and act:
+
+| Type | Criteria | Action |
+|------|----------|--------|
+| **Trivial** | Different variable name, slightly different file location, import path difference | Just do it. No need to mention. |
+| **Minor** | Need an extra dependency, different function signature than planned, need a utility function not in plan | Do it. Note in commit message: `deviation: {what and why}` |
+| **Major** | Task would build a different feature than described, architectural approach is wrong, plan assumes something that isn't true about the codebase | STOP. Do not implement. Return: `BLOCKED — major deviation: {description}. The plan assumes X but the codebase actually does Y. Recommend replanning.` |
+| **Blocker** | Missing dependency that can't be installed, API/service doesn't exist, required file from another task doesn't exist yet (wave ordering issue) | STOP. Return: `BLOCKED — dependency missing: {what's needed}. This task likely needs to move to a later wave.` |
+
+Rule of thumb: If you can explain the change in one sentence in a commit message, it's minor. If you'd need to rewrite the task description, it's major.
 
 ## Rules
 

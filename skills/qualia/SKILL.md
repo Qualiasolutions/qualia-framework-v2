@@ -22,7 +22,13 @@ echo "---VERIFICATIONS---"
 ls .planning/phase-*-verification.md 2>/dev/null || echo "NO_VERIFICATIONS"
 ```
 
-### 2. Route
+### Task Routing (size-based)
+
+- Single file change, config tweak, typo fix, bug with known cause → `/qualia-quick`
+- One feature, 1-5 files, clear scope, under 2 hours → `/qualia-task`
+- Multi-feature, 5+ files, needs architecture decisions, or part of a roadmap phase → `/qualia-plan`
+
+### 2. Route (state-based)
 
 | Condition | Command |
 |-----------|---------|

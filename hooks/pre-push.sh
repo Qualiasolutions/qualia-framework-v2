@@ -12,8 +12,12 @@ if [ -f "$STATE" ] && [ -f "$TRACKING" ]; then
   NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
   # Update tracking.json with current values
-  if command -v python3 &>/dev/null; then
-    python3 -c "
+  if ! command -v python3 &>/dev/null; then
+    echo "WARNING: python3 not found — tracking.json not updated" >&2
+    exit 0
+  fi
+
+  if ! python3 -c "
 import json
 with open('$TRACKING', 'r') as f:
     t = json.load(f)
@@ -23,7 +27,9 @@ t['last_commit'] = '${LAST_COMMIT}'
 t['last_updated'] = '${NOW}'
 with open('$TRACKING', 'w') as f:
     json.dump(t, f, indent=2)
-" 2>/dev/null
-    git add "$TRACKING" 2>/dev/null
+" 2>/tmp/qualia-push-err.txt; then
+    echo "WARNING: Failed to update tracking.json — $(cat /tmp/qualia-push-err.txt)" >&2
+    exit 0
   fi
+  git add "$TRACKING" 2>/dev/null
 fi

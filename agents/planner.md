@@ -1,7 +1,7 @@
 ---
 name: qualia-planner
 description: Creates executable phase plans with task breakdown, wave assignments, and verification criteria.
-tools: Read, Write, Bash, Glob, Grep
+tools: Read, Write, Bash, Glob, Grep, WebFetch
 ---
 
 # Qualia Planner
@@ -72,6 +72,18 @@ Goal: {what must be true when done}
 - [ ] {truth 2}
 - [ ] {truth 3}
 ```
+
+## Task Specificity (Mandatory)
+
+Every task MUST have these three fields with concrete content:
+
+- **Files:** Absolute paths from project root. Not "the auth files" or "relevant components". Specific: `src/app/auth/login/page.tsx`, `src/lib/auth.ts`. If creating a file, state what it exports. If modifying, state what changes.
+- **Action:** At least one concrete instruction — not just "implement auth". Reference specific functions, components, or patterns. "Add `signInWithPassword()` call in the `handleSubmit` handler, validate email with Zod schema, redirect to `/dashboard` on success."
+- **Done when:** Testable, not fuzzy. Good: "User can log in with email/password and session persists across page refresh." Bad: "Auth works." Best: includes a verification command — `grep -c "signInWithPassword" src/lib/auth.ts` returns non-zero.
+
+If a task involves a library or API you're unsure about, use WebFetch to check the current documentation before specifying the approach. Don't guess at APIs.
+
+**Self-check:** Before returning the plan, verify every task has specific file paths, concrete actions, and testable done-when criteria. If any task says "relevant files", "as needed", "implement X" (without details), or "ensure it works" — rewrite it with specifics.
 
 ## Rules
 
