@@ -1,0 +1,39 @@
+{
+  "name": "qualia-framework-v2",
+  "version": "2.0.0",
+  "description": "Claude Code workflow framework by Qualia Solutions. Plan, build, verify, ship.",
+  "bin": {
+    "qualia-framework-v2": "./bin/cli.js"
+  },
+  "keywords": [
+    "claude-code",
+    "claude",
+    "ai",
+    "framework",
+    "workflow",
+    "qualia",
+    "agents",
+    "automation"
+  ],
+  "author": "Qualia Solutions <hello@qualia.solutions>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/qualia-solutions/qualia-framework-v2"
+  },
+  "homepage": "https://github.com/qualia-solutions/qualia-framework-v2#readme",
+  "files": [
+    "bin/",
+    "agents/",
+    "hooks/",
+    "rules/",
+    "skills/",
+    "templates/",
+    "CLAUDE.md",
+    "guide.md",
+    "statusline.sh"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "project": "",
+  "client": "",
+  "type": "",
+  "assigned_to": "",
+  "phase": 0,
+  "phase_name": "",
+  "total_phases": 0,
+  "status": "setup",
+  "wave": 0,
+  "tasks_done": 0,
+  "tasks_total": 0,
+  "verification": "pending",
+  "blockers": [],
+  "last_updated": "",
+  "last_commit": "",
+  "deployed_url": "",
+  "notes": ""
+}
