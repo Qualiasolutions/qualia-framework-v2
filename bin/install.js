@@ -198,6 +198,20 @@ async function main() {
     warn(`CLAUDE.md — ${e.message}`);
   }
 
+  // ─── Scripts ─────────────────────────────────────────────
+  log(`${WHITE}Scripts${RESET}`);
+  try {
+    const binDest = path.join(CLAUDE_DIR, "bin");
+    if (!fs.existsSync(binDest)) fs.mkdirSync(binDest, { recursive: true });
+    copy(
+      path.join(FRAMEWORK_DIR, "bin", "state.js"),
+      path.join(binDest, "state.js")
+    );
+    ok("state.js (state machine)");
+  } catch (e) {
+    warn(`state.js — ${e.message}`);
+  }
+
   // ─── Guide ─────────────────────────────────────────────
   try {
     copy(
@@ -383,6 +397,7 @@ async function main() {
   console.log(`  Agents:       ${WHITE}3${RESET} ${DIM}(planner, builder, verifier)${RESET}`);
   console.log(`  Hooks:        ${WHITE}6${RESET} ${DIM}(branch-guard, pre-push, env-block, migration-guard, deploy-gate, pre-compact)${RESET}`);
   console.log(`  Rules:        ${WHITE}3${RESET} ${DIM}(security, frontend, deployment)${RESET}`);
+  console.log(`  Scripts:      ${WHITE}1${RESET} ${DIM}(state.js)${RESET}`);
   console.log(`  Templates:    ${WHITE}4${RESET}`);
   console.log(`  Status line:  ${GREEN}✓${RESET}`);
   console.log(`  CLAUDE.md:    ${GREEN}✓${RESET} ${DIM}(${member.role})${RESET}`);

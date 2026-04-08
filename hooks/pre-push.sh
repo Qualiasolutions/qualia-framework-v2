@@ -1,35 +1,28 @@
 #!/bin/bash
-# Update tracking.json from STATE.md before push
+# Update tracking.json timestamps before push
+# State.js handles phase/status sync — this just updates commit hash and timestamp
 
 TRACKING=".planning/tracking.json"
-STATE=".planning/STATE.md"
 
-if [ -f "$STATE" ] && [ -f "$TRACKING" ]; then
-  # Extract current phase from STATE.md
-  PHASE=$(grep "^Phase:" "$STATE" | head -1 | sed 's/Phase: *//' | cut -d' ' -f1)
-  STATUS=$(grep "^Status:" "$STATE" | head -1 | sed 's/Status: *//')
+if [ -f "$TRACKING" ]; then
+  if ! command -v node &>/dev/null; then
+    echo "WARNING: node not found, skipping tracking sync" >&2
+    exit 0
+  fi
+
   LAST_COMMIT=$(git log --oneline -1 --format="%h" 2>/dev/null)
   NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-  # Update tracking.json with current values
-  if ! command -v python3 &>/dev/null; then
-    echo "WARNING: python3 not found — tracking.json not updated" >&2
-    exit 0
-  fi
-
-  if ! python3 -c "
-import json
-with open('$TRACKING', 'r') as f:
-    t = json.load(f)
-t['phase'] = int('${PHASE:-0}') if '${PHASE:-0}'.isdigit() else t.get('phase', 0)
-t['status'] = '${STATUS:-unknown}'.lower().replace(' ', '_')
-t['last_commit'] = '${LAST_COMMIT}'
-t['last_updated'] = '${NOW}'
-with open('$TRACKING', 'w') as f:
-    json.dump(t, f, indent=2)
-" 2>/tmp/qualia-push-err.txt; then
-    echo "WARNING: Failed to update tracking.json — $(cat /tmp/qualia-push-err.txt)" >&2
-    exit 0
-  fi
+  node -e "
+    const fs = require('fs');
+    try {
+      const t = JSON.parse(fs.readFileSync('$TRACKING', 'utf8'));
+      t.last_commit = '${LAST_COMMIT}';
+      t.last_updated = '${NOW}';
+      fs.writeFileSync('$TRACKING', JSON.stringify(t, null, 2) + '\n');
+    } catch (e) {
+      process.stderr.write('WARNING: tracking sync failed: ' + e.message + '\n');
+    }
+  "
   git add "$TRACKING" 2>/dev/null
 fi

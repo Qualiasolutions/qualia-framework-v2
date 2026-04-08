@@ -11,6 +11,7 @@
   "tasks_done": 0,
   "tasks_total": 0,
   "verification": "pending",
+  "gap_cycles": {},
   "blockers": [],
   "last_updated": "",
   "last_commit": "",
