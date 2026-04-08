@@ -75,5 +75,10 @@ Read the verification report. Present:
 
 ### 4. Update State
 
-Update STATE.md: verification result
-Update tracking.json: verification → "pass" or "fail"
+```bash
+node ~/.claude/bin/state.js transition --to verified --phase {N} --verification {pass|fail}
+```
+If PASS and more phases: state.js auto-advances to the next phase.
+If FAIL and gap_cycles >= 2: state.js returns GAP_CYCLE_LIMIT — tell the employee to escalate.
+If FAIL and gap_cycles < 2: proceed to `/qualia-plan {N} --gaps`.
+Do NOT manually edit STATE.md or tracking.json — state.js handles both.

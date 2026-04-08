@@ -223,9 +223,13 @@ Create Supabase project (via MCP or manual).
 **`.planning/PROJECT.md`** — use template, fill from answers:
 - Client, description, requirements (from features), out of scope, stack, design direction, decisions
 
-**`.planning/STATE.md`** — use template from `templates/state.md`
+### Step 8b. Initialize State
 
-**`.planning/tracking.json`** — use template, fill in project/client/assigned_to
+```bash
+node ~/.claude/bin/state.js init --project "{name}" --client "{client}" --type "{type}" --assigned-to "{employee}" --phases '[{phases JSON array from roadmap}]'
+```
+This creates both STATE.md and tracking.json with consistent formatting.
+Do NOT manually edit these files — state.js handles both.
 
 ### Step 9. Create Roadmap
 

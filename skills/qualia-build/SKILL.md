@@ -85,8 +85,11 @@ If a builder subagent returns a deviation or blocker:
 
 ### 5. Update State
 
-Update STATE.md: status → "built", tasks completed
-Update tracking.json: tasks_done, wave, status
+```bash
+node ~/.claude/bin/state.js transition --to built --phase {N} --tasks-done {done} --tasks-total {total} --wave {wave}
+```
+If state.js returns an error, show it to the employee and stop.
+Do NOT manually edit STATE.md or tracking.json — state.js handles both.
 
 ```
   → Run: /qualia-verify {N}

@@ -53,4 +53,7 @@ git add .continue-here.md {any uncommitted work files}
 git commit -m "WIP: {phase name} — session handoff"
 ```
 
-Update STATE.md last activity.
+```bash
+node ~/.claude/bin/state.js transition --to note --notes "Session paused — see .continue-here.md"
+```
+Do NOT manually edit STATE.md or tracking.json — state.js handles both.

@@ -49,8 +49,10 @@ git add {changed files}
 git commit -m "polish: design and UX pass"
 ```
 
-Update STATE.md: "polish complete"
-Update tracking.json: status → "polished"
+```bash
+node ~/.claude/bin/state.js transition --to polished
+```
+Do NOT manually edit STATE.md or tracking.json — state.js handles both.
 
 ```
   → Run: /qualia-ship

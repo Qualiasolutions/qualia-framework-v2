@@ -56,8 +56,10 @@ git push
 
 ### 3. Update State
 
-Update STATE.md: "handed off"
-Update tracking.json: status → "handed_off"
+```bash
+node ~/.claude/bin/state.js transition --to handed_off
+```
+Do NOT manually edit STATE.md or tracking.json — state.js handles both.
 
 ```
 ◆ QUALIA ► DELIVERED ✓

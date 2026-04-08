@@ -76,8 +76,11 @@ If "adjust" — get feedback, re-spawn planner with revision context.
 
 ### 4. Update State
 
-Update STATE.md: status → "planned"
-Update tracking.json: status → "planned"
+```bash
+node ~/.claude/bin/state.js transition --to planned --phase {N}
+```
+If state.js returns an error, show it to the employee and stop.
+Do NOT manually edit STATE.md or tracking.json — state.js handles both.
 
 ```
   → Run: /qualia-build {N}

@@ -83,8 +83,10 @@ curl -s -o /dev/null -w "%{http_code}" {domain}/api/auth/callback
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-Update STATE.md: "shipped"
-Update tracking.json: status → "shipped", deployed_url
+```bash
+node ~/.claude/bin/state.js transition --to shipped --deployed-url {production url}
+```
+Do NOT manually edit STATE.md or tracking.json — state.js handles both.
 
 ```
   → Run: /qualia-handoff

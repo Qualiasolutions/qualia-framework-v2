@@ -89,4 +89,7 @@ After the builder finishes:
   Status    ✓ Done
 ```
 
-Update `.planning/tracking.json` notes field if it exists.
+```bash
+node ~/.claude/bin/state.js transition --to note --notes "{task description}"
+```
+Do NOT manually edit STATE.md or tracking.json — state.js handles both.
