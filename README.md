@@ -66,6 +66,10 @@ The `settings.json` hooks are real ops engineering, not theoretical:
 - **Env block** — Prevents Claude from touching `.env` files
 - **Pre-compact** — Saves state before context compression
 
+### Enforced State Machine
+
+Every workflow step calls `state.js` — a Node.js state machine that validates preconditions, updates both STATE.md and tracking.json atomically, and tracks gap-closure cycles. You can't build without planning, can't verify without building, and can't loop on gap-closure more than twice before escalating.
+
 ### Wave-Based Parallelization
 
 Plans are grouped into waves for parallel execution. No fancy DAG solver — the planner assigns wave numbers, the orchestrator spawns agents per wave. Pragmatic over clever.
@@ -84,6 +88,7 @@ npx qualia-framework-v2 install
   ├── skills/          17 slash commands
   ├── agents/          planner.md, builder.md, verifier.md
   ├── hooks/           7 shell scripts (branch, env, migration, deploy, push, compact, session)
+  ├── bin/             state.js (state machine with precondition enforcement)
   ├── rules/           security.md, frontend.md, deployment.md
   ├── qualia-templates/ tracking.json, state.md, project.md, plan.md
   ├── CLAUDE.md        global instructions (role-configured per team member)
