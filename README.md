@@ -19,18 +19,28 @@ Open Claude Code in any project directory:
 ```
 /qualia-new       # Set up a new project
 /qualia           # What should I do next?
+/qualia-idk       # I'm stuck — smart advisor
 /qualia-plan      # Plan the current phase
-/qualia-build     # Build it
-/qualia-verify    # Verify it works
-/qualia-ship      # Deploy
-/qualia-report    # Log your work
+/qualia-build     # Build it (parallel tasks)
+/qualia-verify    # Verify it actually works
+/qualia-design    # One-shot design transformation
+/qualia-debug     # Structured debugging
+/qualia-review    # Production audit
+/qualia-quick     # Skip planning, just do it
+/qualia-task      # Build one thing properly
+/qualia-polish    # Design and UX pass
+/qualia-ship      # Deploy to production
+/qualia-handoff   # Deliver to client
+/qualia-pause     # Save session, continue later
+/qualia-resume    # Pick up where you left off
+/qualia-report    # Log your work (mandatory)
 ```
 
 See `guide.md` for the full developer guide.
 
 ## What's Inside
 
-- **11 skills** — slash commands that guide you from setup to handoff
+- **17 skills** — slash commands from setup to handoff, plus debugging, design, review, and session management
 - **3 agents** — planner, builder, verifier (each in fresh context)
 - **7 hooks** — branch guard, pre-push tracking sync, env protection, migration guard, deploy gate, pre-compact state save, session start
 - **3 rules** — security, frontend, deployment
@@ -71,7 +81,7 @@ npx qualia-framework-v2 install
      |
      v
 ~/.claude/
-  ├── skills/          11 slash commands
+  ├── skills/          17 slash commands
   ├── agents/          planner.md, builder.md, verifier.md
   ├── hooks/           7 shell scripts (branch, env, migration, deploy, push, compact, session)
   ├── rules/           security.md, frontend.md, deployment.md
