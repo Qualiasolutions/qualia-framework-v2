@@ -223,6 +223,36 @@ async function main() {
     warn(`guide.md — ${e.message}`);
   }
 
+  // ─── Knowledge directory ─────────────────────────────────
+  log(`${WHITE}Knowledge${RESET}`);
+  const knowledgeDir = path.join(CLAUDE_DIR, "knowledge");
+  if (!fs.existsSync(knowledgeDir)) fs.mkdirSync(knowledgeDir, { recursive: true });
+  const knowledgeFiles = {
+    "learned-patterns.md": "# Learned Patterns\n\nPatterns discovered across projects. Updated by `/qualia-evolve` and manual notes.\n",
+    "common-fixes.md": "# Common Fixes\n\nRecurring issues and their solutions.\n",
+    "client-prefs.md": "# Client Preferences\n\nClient-specific preferences, design choices, and requirements.\n",
+  };
+  for (const [name, defaultContent] of Object.entries(knowledgeFiles)) {
+    const dest = path.join(knowledgeDir, name);
+    if (!fs.existsSync(dest)) {
+      fs.writeFileSync(dest, defaultContent);
+      ok(`${name} (created)`);
+    } else {
+      ok(`${name} (exists)`);
+    }
+  }
+
+  // ─── Save config (for update command) ──────────────────
+  const configFile = path.join(CLAUDE_DIR, ".qualia-config.json");
+  const config = {
+    code,
+    installed_by: member.name,
+    role: member.role,
+    version: require("../package.json").version,
+    installed_at: new Date().toISOString().split("T")[0],
+  };
+  fs.writeFileSync(configFile, JSON.stringify(config, null, 2) + "\n");
+
   // ─── Configure settings.json ───────────────────────────
   console.log("");
   log(`${WHITE}Configuring settings.json...${RESET}`);
@@ -397,7 +427,8 @@ async function main() {
   console.log(`  Agents:       ${WHITE}3${RESET} ${DIM}(planner, builder, verifier)${RESET}`);
   console.log(`  Hooks:        ${WHITE}6${RESET} ${DIM}(branch-guard, pre-push, env-block, migration-guard, deploy-gate, pre-compact)${RESET}`);
   console.log(`  Rules:        ${WHITE}3${RESET} ${DIM}(security, frontend, deployment)${RESET}`);
-  console.log(`  Scripts:      ${WHITE}1${RESET} ${DIM}(state.js)${RESET}`);
+  console.log(`  Scripts:      ${WHITE}1${RESET} ${DIM}(state.js — state machine)${RESET}`);
+  console.log(`  Knowledge:    ${WHITE}3${RESET} ${DIM}(patterns, fixes, client prefs)${RESET}`);
   console.log(`  Templates:    ${WHITE}4${RESET}`);
   console.log(`  Status line:  ${GREEN}✓${RESET}`);
   console.log(`  CLAUDE.md:    ${GREEN}✓${RESET} ${DIM}(${member.role})${RESET}`);

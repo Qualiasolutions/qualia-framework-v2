@@ -12,6 +12,12 @@ npx qualia-framework-v2 install
 
 Enter your team code when prompted. Get your code from Fawzi.
 
+**Other commands:**
+```bash
+npx qualia-framework-v2 version    # Check installed version + updates
+npx qualia-framework-v2 update     # Update to latest (remembers your code)
+```
+
 ## Usage
 
 Open Claude Code in any project directory:
@@ -33,6 +39,7 @@ Open Claude Code in any project directory:
 /qualia-handoff   # Deliver to client
 /qualia-pause     # Save session, continue later
 /qualia-resume    # Pick up where you left off
+/qualia-learn     # Save a pattern, fix, or client pref
 /qualia-report    # Log your work (mandatory)
 ```
 
@@ -40,7 +47,7 @@ See `guide.md` for the full developer guide.
 
 ## What's Inside
 
-- **17 skills** — slash commands from setup to handoff, plus debugging, design, review, and session management
+- **18 skills** — slash commands from setup to handoff, plus debugging, design, review, knowledge, and session management
 - **3 agents** — planner, builder, verifier (each in fresh context)
 - **7 hooks** — branch guard, pre-push tracking sync, env protection, migration guard, deploy gate, pre-compact state save, session start
 - **3 rules** — security, frontend, deployment
@@ -85,10 +92,11 @@ npx qualia-framework-v2 install
      |
      v
 ~/.claude/
-  ├── skills/          17 slash commands
+  ├── skills/          18 slash commands
   ├── agents/          planner.md, builder.md, verifier.md
   ├── hooks/           7 shell scripts (branch, env, migration, deploy, push, compact, session)
   ├── bin/             state.js (state machine with precondition enforcement)
+  ├── knowledge/       learned-patterns.md, common-fixes.md, client-prefs.md
   ├── rules/           security.md, frontend.md, deployment.md
   ├── qualia-templates/ tracking.json, state.md, project.md, plan.md
   ├── CLAUDE.md        global instructions (role-configured per team member)
