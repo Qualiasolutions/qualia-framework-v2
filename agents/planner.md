@@ -85,6 +85,20 @@ If a task involves a library or API you're unsure about, use WebFetch to check t
 
 **Self-check:** Before returning the plan, verify every task has specific file paths, concrete actions, and testable done-when criteria. If any task says "relevant files", "as needed", "implement X" (without details), or "ensure it works" — rewrite it with specifics.
 
+## Design-Aware Planning
+
+When a phase involves frontend work (pages, components, layouts, UI):
+
+1. **Check for `.planning/DESIGN.md`** — if it exists, reference it in task Context fields: `@.planning/DESIGN.md`
+2. **If no DESIGN.md and this is Phase 1** — add a Task 1 (Wave 1) to create it:
+   - Generate `.planning/DESIGN.md` from the design direction in PROJECT.md
+   - Use the template at `templates/DESIGN.md` — fill in: palette, typography (distinctive fonts), spacing, motion approach, component patterns
+   - Done when: DESIGN.md exists with concrete CSS variable values (not placeholders)
+3. **Include design criteria in "Done when"** for frontend tasks:
+   - Not just "page renders" but "page renders with design system typography, proper color palette, all interactive states (hover/focus/loading/error/empty), semantic HTML, keyboard accessible"
+   - Include responsive: "works on 375px mobile and 1440px desktop"
+4. **Reference `@.planning/DESIGN.md`** in the Context field of every frontend task so builders read it before coding
+
 ## Rules
 
 1. **Plans complete within ~50% context.** More plans with smaller scope = consistent quality. 2-3 tasks per plan is ideal.

@@ -83,10 +83,28 @@ Rule of thumb: If you can explain the change in one sentence in a commit message
    - Always check auth server-side
    - Enable RLS on every table
    - Validate input with Zod at system boundaries
-5. **Frontend standards:**
-   - Distinctive fonts (not Inter/Arial)
-   - Cohesive color palette with sharp accents
-   - CSS transitions, subtle animations
-   - Full-width layouts, no hardcoded max-width
+5. **Frontend standards (mandatory for any .tsx/.jsx/.css file):**
+   - Before writing any frontend code: read `.planning/DESIGN.md` if it exists — it's the design source of truth
+   - If no DESIGN.md, apply rules from `rules/frontend.md` (Qualia defaults)
+   - Distinctive fonts (never Inter, Roboto, Arial, system-ui, Space Grotesk)
+   - Cohesive color palette via CSS variables — sharp accent for CTAs
+   - All text: WCAG AA contrast (4.5:1 normal, 3:1 large text)
+   - Full-width fluid layouts — no hardcoded max-width caps
+   - Every interactive element needs ALL states: hover, focus (visible ring), active, disabled, loading, error, empty
+   - Semantic HTML (`nav`, `main`, `section`, `article`) — not div soup
+   - Keyboard accessible: Tab, Enter, Escape, Arrow keys work
+   - Touch targets: 44px minimum
+   - Form inputs: visible labels (not placeholder-only), error messages with `aria-describedby`
+   - Motion: 150–200ms hover, 250ms expand, stagger children on load, respect `prefers-reduced-motion`
+   - Mobile-first responsive: stack on mobile, expand on desktop, fluid typography
+   - Skip link on every page, heading hierarchy (one h1, sequential order)
+   - No emoji as icons — use SVGs
+   - `cursor: pointer` on all clickable elements
 6. **No empty catch blocks.** At minimum, log the error.
 7. **No dangerouslySetInnerHTML.** No eval().
+8. **React/Next.js performance:**
+   - Server Components by default — only `'use client'` for state/effects/browser APIs
+   - Fetch data in parallel (`Promise.all`), not sequential waterfalls
+   - Import specific functions, not entire libraries — avoid barrel file re-exports
+   - Use `next/image` with explicit width/height
+   - Use `next/dynamic` for heavy below-fold components

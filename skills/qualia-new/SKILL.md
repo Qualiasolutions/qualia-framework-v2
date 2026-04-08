@@ -223,6 +223,44 @@ Create Supabase project (via MCP or manual).
 **`.planning/PROJECT.md`** — use template, fill from answers:
 - Client, description, requirements (from features), out of scope, stack, design direction, decisions
 
+### Step 8a. Create Design System
+
+Generate **`.planning/DESIGN.md`** using `templates/DESIGN.md` as the template.
+
+Fill in based on the design direction chosen in Step 3:
+
+**Dark & Bold:**
+- Palette: dark backgrounds (#0a0a0a, #141414), vibrant accent (teal #00d4aa, amber #f59e0b, etc.)
+- Typography: bold display font + clean body font (e.g., "Plus Jakarta Sans" + "DM Sans")
+- Effects: glass morphism, noise textures, glow effects
+- Motion: expressive — staggered fades, parallax hints
+
+**Clean & Minimal:**
+- Palette: light backgrounds (#fafafa, #ffffff), single muted accent
+- Typography: refined serif or geometric sans (e.g., "Outfit" + "Source Serif 4")
+- Effects: subtle shadows, thin borders
+- Motion: minimal — fades only, no stagger
+
+**Colorful & Playful:**
+- Palette: vibrant multi-color, warm backgrounds
+- Typography: rounded friendly fonts (e.g., "Nunito" + "Quicksand")
+- Effects: gradients, rounded shapes, illustrations
+- Motion: expressive — bouncy spring easing, scale on hover
+
+**Corporate / Professional:**
+- Palette: navy/charcoal base, conservative accent (blue, green)
+- Typography: trustworthy geometric (e.g., "Manrope" + "IBM Plex Sans")
+- Effects: clean borders, subtle shadows, structured grids
+- Motion: subtle — smooth fades, no bounce
+
+**Always include in DESIGN.md:**
+- Concrete CSS variable values (not placeholders)
+- Google Fonts import URL
+- Spacing scale (8px grid)
+- Component patterns (buttons, inputs, cards)
+- Responsive approach
+- Anti-patterns to avoid
+
 ### Step 8b. Initialize State
 
 ```bash
