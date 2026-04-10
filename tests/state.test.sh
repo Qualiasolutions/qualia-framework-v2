@@ -392,6 +392,143 @@ else
   fail_case "--to activity" "exit=$EXIT out=$OUT"
 fi
 
+# ─── Parse schema errors ─────────────────────────────────
+echo ""
+echo "parse schema errors:"
+
+# 21. Well-formed STATE.md: no schema_errors field in check output
+TMP=$(make_project)
+OUT=$(cd "$TMP" && $NODE "$STATE_JS" check 2>&1)
+EXIT=$?
+if [ "$EXIT" -eq 0 ] \
+   && echo "$OUT" | grep -q '"ok": true' \
+   && ! echo "$OUT" | grep -q 'schema_errors'; then
+  pass "well-formed STATE.md: check has no schema_errors"
+else
+  fail_case "well-formed no schema_errors" "exit=$EXIT out=$OUT"
+fi
+
+# 22. Missing Phase: header → schema_errors with phase_header (error)
+TMP=$(make_project)
+sed -i.bak '/^Phase:/d' "$TMP/.planning/STATE.md"
+OUT=$(cd "$TMP" && $NODE "$STATE_JS" check 2>&1)
+EXIT=$?
+if [ "$EXIT" -eq 0 ] \
+   && echo "$OUT" | grep -q 'schema_errors' \
+   && echo "$OUT" | grep -q 'phase_header'; then
+  pass "missing Phase: header → schema_errors contains phase_header"
+else
+  fail_case "missing phase header" "exit=$EXIT out=$OUT"
+fi
+
+# 23. Missing roadmap table header → schema_errors with roadmap_table
+TMP=$(make_project)
+sed -i.bak '/^| # | Phase | Goal | Status |$/d' "$TMP/.planning/STATE.md"
+OUT=$(cd "$TMP" && $NODE "$STATE_JS" check 2>&1)
+EXIT=$?
+if [ "$EXIT" -eq 0 ] \
+   && echo "$OUT" | grep -q 'schema_errors' \
+   && echo "$OUT" | grep -q 'roadmap_table'; then
+  pass "missing roadmap table → schema_errors contains roadmap_table"
+else
+  fail_case "missing roadmap_table" "exit=$EXIT out=$OUT"
+fi
+
+# 24. Missing Status: line → schema_errors warning status_field, ok:true
+TMP=$(make_project)
+sed -i.bak '/^Status:/d' "$TMP/.planning/STATE.md"
+OUT=$(cd "$TMP" && $NODE "$STATE_JS" check 2>&1)
+EXIT=$?
+if [ "$EXIT" -eq 0 ] \
+   && echo "$OUT" | grep -q '"ok": true' \
+   && echo "$OUT" | grep -q 'schema_errors' \
+   && echo "$OUT" | grep -q 'status_field' \
+   && echo "$OUT" | grep -q '"severity": "warning"'; then
+  pass "missing Status: → warning status_field, ok:true"
+else
+  fail_case "missing Status field" "exit=$EXIT out=$OUT"
+fi
+
+# 25. Roadmap row count mismatch → schema_errors warning roadmap_rows
+# Hand-edit header to claim 3 phases when only 2 rows exist.
+TMP=$(make_project)
+sed -i.bak 's/^Phase: 1 of 2 — Foundation/Phase: 1 of 3 — Foundation/' "$TMP/.planning/STATE.md"
+OUT=$(cd "$TMP" && $NODE "$STATE_JS" check 2>&1)
+EXIT=$?
+if [ "$EXIT" -eq 0 ] \
+   && echo "$OUT" | grep -q 'schema_errors' \
+   && echo "$OUT" | grep -q 'roadmap_rows'; then
+  pass "roadmap row count mismatch → warning roadmap_rows"
+else
+  fail_case "roadmap row count mismatch" "exit=$EXIT out=$OUT"
+fi
+
+# 26. Transition refuses on severity=error (missing Phase: header)
+TMP=$(make_project)
+touch "$TMP/.planning/phase-1-plan.md"
+sed -i.bak '/^Phase:/d' "$TMP/.planning/STATE.md"
+OUT=$(cd "$TMP" && $NODE "$STATE_JS" transition --to planned 2>&1)
+EXIT=$?
+if [ "$EXIT" -eq 1 ] \
+   && echo "$OUT" | grep -q '"error": "STATE_SCHEMA_ERROR"'; then
+  pass "transition refused on severity=error (STATE_SCHEMA_ERROR)"
+else
+  fail_case "transition STATE_SCHEMA_ERROR" "exit=$EXIT out=$OUT"
+fi
+
+# 27. fix rewrites malformed STATE.md into canonical form
+TMP=$(make_project)
+sed -i.bak '/^Phase:/d' "$TMP/.planning/STATE.md"
+# Confirm it's broken first
+(cd "$TMP" && $NODE "$STATE_JS" check 2>&1 | grep -q schema_errors) || \
+  fail_case "fix pretest: check should show errors"
+OUT=$(cd "$TMP" && $NODE "$STATE_JS" fix 2>&1)
+EXIT=$?
+OUT2=$(cd "$TMP" && $NODE "$STATE_JS" check 2>&1)
+if [ "$EXIT" -eq 0 ] \
+   && echo "$OUT" | grep -q '"action": "fix"' \
+   && echo "$OUT" | grep -q '"fixed": true' \
+   && echo "$OUT" | grep -q '"previous_errors": 1' \
+   && ! echo "$OUT2" | grep -q 'schema_errors'; then
+  pass "fix repairs malformed STATE.md"
+else
+  fail_case "fix repair" "exit=$EXIT fix=$OUT check=$OUT2"
+fi
+
+# 28. fix on well-formed STATE.md is a no-op (still parses clean)
+TMP=$(make_project)
+OUT=$(cd "$TMP" && $NODE "$STATE_JS" fix 2>&1)
+EXIT=$?
+OUT2=$(cd "$TMP" && $NODE "$STATE_JS" check 2>&1)
+if [ "$EXIT" -eq 0 ] \
+   && echo "$OUT" | grep -q '"action": "fix"' \
+   && echo "$OUT" | grep -q '"previous_errors": 0' \
+   && ! echo "$OUT2" | grep -q 'schema_errors' \
+   && echo "$OUT2" | grep -q '"phase": 1' \
+   && echo "$OUT2" | grep -q '"total_phases": 2'; then
+  pass "fix on well-formed STATE.md is idempotent"
+else
+  fail_case "fix idempotent" "exit=$EXIT fix=$OUT check=$OUT2"
+fi
+
+# 29. After fix, transition that was previously blocked now works
+TMP=$(make_project)
+touch "$TMP/.planning/phase-1-plan.md"
+sed -i.bak '/^Phase:/d' "$TMP/.planning/STATE.md"
+# Blocked before fix
+(cd "$TMP" && $NODE "$STATE_JS" transition --to planned 2>&1 | grep -q STATE_SCHEMA_ERROR) || \
+  fail_case "fix unblock pretest: should be blocked"
+(cd "$TMP" && $NODE "$STATE_JS" fix >/dev/null 2>&1)
+OUT=$(cd "$TMP" && $NODE "$STATE_JS" transition --to planned 2>&1)
+EXIT=$?
+if [ "$EXIT" -eq 0 ] \
+   && echo "$OUT" | grep -q '"ok": true' \
+   && echo "$OUT" | grep -q '"status": "planned"'; then
+  pass "after fix, blocked transition succeeds"
+else
+  fail_case "after fix transition" "exit=$EXIT out=$OUT"
+fi
+
 # ─── Summary ─────────────────────────────────────────────
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="

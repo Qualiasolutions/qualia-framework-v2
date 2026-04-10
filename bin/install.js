@@ -266,9 +266,84 @@ async function main() {
   const knowledgeDir = path.join(CLAUDE_DIR, "knowledge");
   if (!fs.existsSync(knowledgeDir)) fs.mkdirSync(knowledgeDir, { recursive: true });
   const knowledgeFiles = {
-    "learned-patterns.md": "# Learned Patterns\n\nPatterns discovered across projects. Updated by `/qualia-learn` and manual notes.\n",
-    "common-fixes.md": "# Common Fixes\n\nRecurring issues and their solutions.\n",
-    "client-prefs.md": "# Client Preferences\n\nClient-specific preferences, design choices, and requirements.\n",
+    "learned-patterns.md": `# Learned Patterns
+
+Patterns discovered across projects. Updated by \`/qualia-learn\` and manual notes.
+
+---
+
+## Cross-platform Node: always spawnSync with argv, never execSync with shell strings
+**Why:** \`execSync(\\\`node \${path}/state.js check 2>/dev/null\\\`)\` breaks on Windows when the path contains spaces (common: \`C:\\\\Users\\\\John Doe\`) and the \`2>/dev/null\` redirect is bash-only. Windows cmd.exe tries to create \`\\\\dev\\\\null\` at drive root.
+**How:** Use \`spawnSync(process.execPath, [path, "check"], { stdio: ["ignore","pipe","ignore"] })\`. Argv array is immune to path splitting; \`stdio: "ignore"\` silences stderr without shell redirection.
+
+---
+
+## Cross-platform stdin piping: spawnSync with input:, not bash <<< here-strings
+**Why:** The \`<<<\` bash here-string works on bash + zsh but fails silently on Windows cmd.exe AND on Debian/Ubuntu where \`/bin/sh\` is dash (no \`<<<\` support).
+**How:** \`spawnSync("npx", ["cmd"], { input: "data\\\\n", stdio: ["pipe","inherit","inherit"], shell: process.platform === "win32" })\`. The \`input:\` option pipes stdin directly. \`shell: process.platform === "win32"\` is required because npm/npx are \`.cmd\` shims on Windows that only resolve through a shell.
+
+---
+
+## Fresh-context isolation beats shared-context compression
+**Why:** Claude's output quality degrades as context fills. A single massive context doing plan + build + verify hits the degradation curve on the later tasks.
+**How:** Spawn separate subagents for planner / builder (per task) / verifier. Each gets fresh context. Task 50 gets the same quality as task 1. Cost: PROJECT.md + STATE.md get re-loaded into each subagent context, but the quality win dominates.
+
+---
+
+## Goal-backward verification beats task-completion tracking
+**Why:** A task "create chat component" can be marked complete with a placeholder file. The task ran; the goal didn't.
+**How:** For each phase success criterion, do a 3-level check: (1) what must be TRUE, (2) what files/functions must EXIST and be substantive (not stubs), (3) what must be CONNECTED (imported and called). Grep the codebase. Never trust summaries.
+`,
+    "common-fixes.md": `# Common Fixes
+
+Recurring issues and their solutions.
+
+---
+
+## Install code "Invalid" — user typed letter O instead of digit 0
+**Symptom:** \`npx qualia-framework-v2 install\` rejects \`QS-NAME-O1\` (letter O in suffix).
+**Cause:** Team codes use digit zero (\`-01\`, \`-02\`, etc.), not letter O.
+**Fix:** Since v2.8.1, install.js auto-normalizes: \`QS-FAWZI-O1\` → \`QS-FAWZI-01\`. The normalization only touches the segment after the last dash, so \`QS-MOAYAD-03\` (real O in name) is preserved.
+**Framework version:** Fixed in v2.8.1.
+
+---
+
+## Windows banner shows "No project detected" inside a real project
+**Symptom:** The session-start banner from qualia-ui.js displays the router panel but without phase/status, even in a project with \`.planning/\`.
+**Cause:** Before v2.8.0, \`qualia-ui.js\` called state.js via \`execSync(\\\`node \${path} check 2>/dev/null\\\`)\`. Windows cmd.exe couldn't parse the \`2>/dev/null\` redirect and/or split the path on spaces in the username.
+**Fix:** v2.8.0 switched to \`spawnSync(process.execPath, [statePath, "check"], { stdio: ["ignore","pipe","ignore"] })\`. Argv array + silent stdio = cross-platform safe.
+**Framework version:** Fixed in v2.8.0.
+
+---
+
+## \`npx qualia-framework-v2 update\` fails on Windows or Ubuntu
+**Symptom:** Manual update command fails silently or with a shell parse error on Windows and Debian/Ubuntu.
+**Cause:** Before v2.8.0, cli.js cmdUpdate used \`execSync(\\\`npx ... install <<< "\${code}"\\\`, { shell: true })\`. The \`<<<\` here-string is bash-only; cmd.exe doesn't understand it, and \`/bin/sh\` on Debian/Ubuntu is \`dash\` which also lacks it.
+**Fix:** v2.8.0 replaced with \`spawnSync("npx", [...], { input: code + "\\\\n", shell: process.platform === "win32" })\`. Uses stdin pipe instead of here-string.
+**Framework version:** Fixed in v2.8.0.
+
+---
+
+## Pre-deploy gate false-positive on Next.js Server Components using service_role
+**Symptom:** \`/qualia-ship\` is blocked with "service_role found in client code" for a file that's actually a Server Component (runs server-side only).
+**Cause:** pre-deploy-gate.js skips files matching \`.server.\` filename pattern OR \`server/\` directory path. If the Server Component is at \`app/admin/page.tsx\` (no .server. marker, not in a server/ dir), the scan flags it.
+**Workaround:** Rename to \`.server.tsx\` OR move to a \`server/\` subdirectory OR extract the service_role usage into a helper in \`lib/server/\`.
+**Framework version:** Known issue as of v2.8.1; better heuristic planned for v3.0.
+`,
+    "client-prefs.md": `# Client Preferences
+
+Client-specific preferences, design choices, and requirements. Loaded by \`/qualia-new\` when starting a project for a known client.
+
+---
+
+## Example Client (template)
+**Industry:** {e.g., fintech, healthcare, SaaS}
+**Contact:** {email}
+**Design:** {dark-bold | clean-minimal | colorful-playful | corporate-professional}
+**Stack preferences:** {anything non-default}
+**Hard constraints:** {things they've explicitly said no to}
+**Source of notes:** {date or conversation reference}
+`,
   };
   for (const [name, defaultContent] of Object.entries(knowledgeFiles)) {
     const dest = path.join(knowledgeDir, name);

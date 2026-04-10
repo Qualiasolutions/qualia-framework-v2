@@ -82,33 +82,88 @@ assert_exit "allows safe ALTER TABLE" 0 $?
 echo '{"tool_input":{"file_path":"src/app.tsx","content":"DROP TABLE users;"}}' | $NODE "$HOOKS_DIR/migration-guard.js" > /dev/null 2>&1
 assert_exit "skips non-migration files" 0 $?
 
-# --- branch-guard.js (grep-based — full run needs git + real config) ---
+# --- branch-guard.js (behavioral — real git repo + real config file) ---
 echo ""
 echo "branch-guard:"
 
-if grep -q '.qualia-config.json' "$HOOKS_DIR/branch-guard.js"; then
-  echo "  ✓ reads role from .qualia-config.json"
-  PASS=$((PASS + 1))
-else
-  echo "  ✗ not reading from .qualia-config.json"
-  FAIL=$((FAIL + 1))
-fi
+# setup_guard_repo <branch> <role> → prints absolute path to a fresh tmp dir
+# containing a git repo (checked out to <branch>) and a
+# .claude/.qualia-config.json with {"role":"<role>"}. Caller must `rm -rf`.
+setup_guard_repo() {
+  local branch="$1" role="$2"
+  local tmp
+  tmp=$(mktemp -d)
+  mkdir -p "$tmp/proj" "$tmp/.claude"
+  (cd "$tmp/proj" \
+    && git init -q \
+    && git checkout -b "$branch" -q 2>/dev/null)
+  printf '{"role":"%s"}\n' "$role" > "$tmp/.claude/.qualia-config.json"
+  echo "$tmp"
+}
 
-if grep -q 'branch --show-current' "$HOOKS_DIR/branch-guard.js"; then
-  echo "  ✓ checks current git branch"
-  PASS=$((PASS + 1))
-else
-  echo "  ✗ missing branch check"
-  FAIL=$((FAIL + 1))
-fi
+# OWNER on main → allowed (exit 0)
+TMP=$(setup_guard_repo main OWNER)
+(cd "$TMP/proj" && HOME="$TMP" $NODE "$HOOKS_DIR/branch-guard.js" >/dev/null 2>&1)
+assert_exit "OWNER on main → allowed" 0 $?
+rm -rf "$TMP"
 
-if grep -q 'OWNER' "$HOOKS_DIR/branch-guard.js"; then
-  echo "  ✓ enforces OWNER role"
+# EMPLOYEE on main → blocked (exit 1)
+TMP=$(setup_guard_repo main EMPLOYEE)
+OUT=$(cd "$TMP/proj" && HOME="$TMP" $NODE "$HOOKS_DIR/branch-guard.js" 2>&1)
+RC=$?
+if [ "$RC" -eq 1 ] && echo "$OUT" | grep -q "BLOCKED" && echo "$OUT" | grep -q "main"; then
+  echo "  ✓ EMPLOYEE on main → blocked (BLOCKED in stdout)"
   PASS=$((PASS + 1))
 else
-  echo "  ✗ missing OWNER check"
+  echo "  ✗ EMPLOYEE on main → blocked (exit=$RC)"
   FAIL=$((FAIL + 1))
 fi
+rm -rf "$TMP"
+
+# EMPLOYEE on master → blocked
+TMP=$(setup_guard_repo master EMPLOYEE)
+(cd "$TMP/proj" && HOME="$TMP" $NODE "$HOOKS_DIR/branch-guard.js" >/dev/null 2>&1)
+assert_exit "EMPLOYEE on master → blocked" 1 $?
+rm -rf "$TMP"
+
+# EMPLOYEE on feature branch → allowed
+TMP=$(setup_guard_repo feature/xyz EMPLOYEE)
+(cd "$TMP/proj" && HOME="$TMP" $NODE "$HOOKS_DIR/branch-guard.js" >/dev/null 2>&1)
+assert_exit "EMPLOYEE on feature/xyz → allowed" 0 $?
+rm -rf "$TMP"
+
+# OWNER on feature branch → allowed
+TMP=$(setup_guard_repo feature/xyz OWNER)
+(cd "$TMP/proj" && HOME="$TMP" $NODE "$HOOKS_DIR/branch-guard.js" >/dev/null 2>&1)
+assert_exit "OWNER on feature/xyz → allowed" 0 $?
+rm -rf "$TMP"
+
+# Missing config → fails closed (block, exit 1)
+TMP=$(mktemp -d)
+mkdir -p "$TMP/proj"
+(cd "$TMP/proj" && git init -q && git checkout -b feature/x -q 2>/dev/null)
+# NO .claude/.qualia-config.json
+(cd "$TMP/proj" && HOME="$TMP" $NODE "$HOOKS_DIR/branch-guard.js" >/dev/null 2>&1)
+assert_exit "missing config → blocked (fails closed)" 1 $?
+rm -rf "$TMP"
+
+# Malformed config JSON → fails closed
+TMP=$(mktemp -d)
+mkdir -p "$TMP/proj" "$TMP/.claude"
+(cd "$TMP/proj" && git init -q && git checkout -b feature/x -q 2>/dev/null)
+echo 'not json{' > "$TMP/.claude/.qualia-config.json"
+(cd "$TMP/proj" && HOME="$TMP" $NODE "$HOOKS_DIR/branch-guard.js" >/dev/null 2>&1)
+assert_exit "malformed config JSON → blocked" 1 $?
+rm -rf "$TMP"
+
+# Empty role field → fails closed
+TMP=$(mktemp -d)
+mkdir -p "$TMP/proj" "$TMP/.claude"
+(cd "$TMP/proj" && git init -q && git checkout -b feature/x -q 2>/dev/null)
+echo '{"role":""}' > "$TMP/.claude/.qualia-config.json"
+(cd "$TMP/proj" && HOME="$TMP" $NODE "$HOOKS_DIR/branch-guard.js" >/dev/null 2>&1)
+assert_exit "empty role field → blocked" 1 $?
+rm -rf "$TMP"
 
 # --- pre-push.js ---
 echo ""
@@ -136,25 +191,100 @@ TMP=$(mktemp -d)
 assert_exit "exits 0 with no tracking.json" 0 $?
 rm -rf "$TMP"
 
-# --- pre-deploy-gate.js ---
+# --- pre-deploy-gate.js (behavioral — real project trees) ---
 echo ""
 echo "pre-deploy-gate:"
 
-if grep -q 'tsc' "$HOOKS_DIR/pre-deploy-gate.js"; then
-  echo "  ✓ runs TypeScript check"
-  PASS=$((PASS + 1))
-else
-  echo "  ✗ missing TypeScript check"
-  FAIL=$((FAIL + 1))
-fi
+# Empty project (no package.json, no tsconfig) → nothing to gate → exit 0
+TMP=$(mktemp -d)
+(cd "$TMP" && $NODE "$HOOKS_DIR/pre-deploy-gate.js" >/dev/null 2>&1)
+assert_exit "empty project → exit 0 (no gates to run)" 0 $?
+rm -rf "$TMP"
 
-if grep -q 'service_role' "$HOOKS_DIR/pre-deploy-gate.js"; then
-  echo "  ✓ checks for service_role leaks"
+# No tsconfig → TypeScript gate skipped → exit 0 (only security scan runs)
+TMP=$(mktemp -d)
+mkdir -p "$TMP/src"
+echo 'export const x = 1;' > "$TMP/src/app.ts"
+(cd "$TMP" && $NODE "$HOOKS_DIR/pre-deploy-gate.js" >/dev/null 2>&1)
+assert_exit "no tsconfig → TS gate skipped → exit 0" 0 $?
+rm -rf "$TMP"
+
+# service_role literal in app/ → BLOCKED with diagnostic
+TMP=$(mktemp -d)
+mkdir -p "$TMP/app"
+cat > "$TMP/app/page.tsx" <<'EOF'
+const key = "service_role_literal_leak";
+export default function P(){return null}
+EOF
+OUT=$(cd "$TMP" && $NODE "$HOOKS_DIR/pre-deploy-gate.js" 2>&1)
+RC=$?
+if [ "$RC" -eq 1 ] \
+   && echo "$OUT" | grep -q "BLOCKED" \
+   && echo "$OUT" | grep -q "service_role"; then
+  echo "  ✓ service_role leak in app/ → blocked with diagnostic"
   PASS=$((PASS + 1))
 else
-  echo "  ✗ missing service_role check"
+  echo "  ✗ service_role leak in app/ → blocked (exit=$RC)"
   FAIL=$((FAIL + 1))
 fi
+rm -rf "$TMP"
+
+# service_role leak in components/ → BLOCKED
+TMP=$(mktemp -d)
+mkdir -p "$TMP/components"
+cat > "$TMP/components/Widget.tsx" <<'EOF'
+const key = "service_role_literal_leak";
+EOF
+(cd "$TMP" && $NODE "$HOOKS_DIR/pre-deploy-gate.js" >/dev/null 2>&1)
+assert_exit "service_role in components/ → blocked" 1 $?
+rm -rf "$TMP"
+
+# service_role in a *.server.ts file → allowed (skip convention)
+TMP=$(mktemp -d)
+mkdir -p "$TMP/app/api"
+cat > "$TMP/app/api/route.server.ts" <<'EOF'
+const key = "service_role_legit_server_key";
+EOF
+(cd "$TMP" && $NODE "$HOOKS_DIR/pre-deploy-gate.js" >/dev/null 2>&1)
+assert_exit ".server.ts is exempt from service_role scan" 0 $?
+rm -rf "$TMP"
+
+# service_role inside a server/ directory → allowed
+TMP=$(mktemp -d)
+mkdir -p "$TMP/app/server"
+cat > "$TMP/app/server/admin.ts" <<'EOF'
+const key = "service_role_legit_server_dir";
+EOF
+(cd "$TMP" && $NODE "$HOOKS_DIR/pre-deploy-gate.js" >/dev/null 2>&1)
+assert_exit "files under server/ are exempt from service_role scan" 0 $?
+rm -rf "$TMP"
+
+# node_modules and dotdirs are NOT walked — a leak inside them must not block
+TMP=$(mktemp -d)
+mkdir -p "$TMP/app/node_modules/evil"
+cat > "$TMP/app/node_modules/evil/index.ts" <<'EOF'
+const key = "service_role_in_node_modules";
+EOF
+(cd "$TMP" && $NODE "$HOOKS_DIR/pre-deploy-gate.js" >/dev/null 2>&1)
+assert_exit "node_modules not walked (leak ignored)" 0 $?
+rm -rf "$TMP"
+
+# Clean project (no leaks anywhere) → passes security gate → exit 0
+TMP=$(mktemp -d)
+mkdir -p "$TMP/app" "$TMP/components" "$TMP/lib"
+echo 'export const a = 1;' > "$TMP/app/page.tsx"
+echo 'export const b = 2;' > "$TMP/components/Widget.tsx"
+echo 'export const c = 3;' > "$TMP/lib/util.ts"
+OUT=$(cd "$TMP" && $NODE "$HOOKS_DIR/pre-deploy-gate.js" 2>&1)
+RC=$?
+if [ "$RC" -eq 0 ] && echo "$OUT" | grep -q "All gates passed"; then
+  echo "  ✓ clean project → all gates pass → exit 0"
+  PASS=$((PASS + 1))
+else
+  echo "  ✗ clean project → all gates pass (exit=$RC)"
+  FAIL=$((FAIL + 1))
+fi
+rm -rf "$TMP"
 
 # --- session-start.js — must exit 0 always ---
 echo ""

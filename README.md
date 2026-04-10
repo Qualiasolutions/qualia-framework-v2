@@ -16,6 +16,7 @@ Enter your team code when prompted. Get your code from Fawzi.
 ```bash
 npx qualia-framework-v2 version    # Check installed version + updates
 npx qualia-framework-v2 update     # Update to latest (remembers your code)
+npx qualia-framework-v2 uninstall  # Clean removal from ~/.claude/
 ```
 
 ## Usage
@@ -114,5 +115,9 @@ npx qualia-framework-v2 install
 ## For Qualia Solutions Team
 
 Stack: Next.js 16+, React 19, TypeScript, Supabase, Vercel.
+
+## Changelog
+
+See [CHANGELOG.md](./CHANGELOG.md) for the full version history.
 
 Built by [Qualia Solutions](https://qualiasolutions.net) — Nicosia, Cyprus.

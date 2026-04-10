@@ -51,19 +51,54 @@ function readState() {
 // ─── STATE.md Parser ─────────────────────────────────────
 function parseStateMd(content) {
   if (!content) return null;
+  const schema_errors = [];
   const get = (prefix) => {
     const m = content.match(new RegExp(`^${prefix}:\\s*(.+)$`, "m"));
     return m ? m[1].trim() : "";
   };
+  const hasField = (prefix) =>
+    new RegExp(`^${prefix}:\\s*`, "m").test(content);
+
   const phaseMatch = content.match(
     /^Phase:\s*(\d+)\s+of\s+(\d+)\s*[—-]\s*(.+)$/m
   );
+  if (!phaseMatch) {
+    schema_errors.push({
+      field: "phase_header",
+      message: 'Missing or malformed "Phase: N of M — Name" header',
+      severity: "error",
+    });
+  }
+
+  // Status field presence (independent of value)
+  if (!hasField("Status")) {
+    schema_errors.push({
+      field: "status_field",
+      message: "Missing Status: field",
+      severity: "warning",
+    });
+  }
+
   // Parse roadmap table
   const phases = [];
+  const tableHeaderRe = /\| # \| Phase \| Goal \| Status \|/;
   const tableMatch = content.match(
     /\| # \| Phase \| Goal \| Status \|\n\|[-|]+\|\n([\s\S]*?)(?=\n##|\n$|$)/
   );
-  if (tableMatch) {
+  if (!tableHeaderRe.test(content)) {
+    schema_errors.push({
+      field: "roadmap_table",
+      message: "Roadmap table header not found",
+      severity: "error",
+    });
+  } else if (!tableMatch) {
+    // Header is there but the separator row or body is malformed
+    schema_errors.push({
+      field: "roadmap_table",
+      message: "Roadmap table is malformed (missing separator row or body)",
+      severity: "error",
+    });
+  } else {
     for (const row of tableMatch[1].trim().split("\n")) {
       const cols = row.split("|").map((c) => c.trim()).filter(Boolean);
       if (cols.length >= 4) {
@@ -76,6 +111,19 @@ function parseStateMd(content) {
       }
     }
   }
+
+  // Row count vs header "of M"
+  if (phaseMatch) {
+    const declaredTotal = parseInt(phaseMatch[2]);
+    if (phases.length && phases.length !== declaredTotal) {
+      schema_errors.push({
+        field: "roadmap_rows",
+        message: `Expected ${declaredTotal} phases in roadmap, found ${phases.length}`,
+        severity: "warning",
+      });
+    }
+  }
+
   return {
     phase: phaseMatch ? parseInt(phaseMatch[1]) : 1,
     total_phases: phaseMatch ? parseInt(phaseMatch[2]) : phases.length || 1,
@@ -83,6 +131,7 @@ function parseStateMd(content) {
     status: get("Status").toLowerCase().replace(/\s+/g, "_") || "setup",
     assigned_to: get("Assigned to") || "",
     phases,
+    schema_errors,
   };
 }
 
@@ -254,6 +303,7 @@ function cmdCheck(opts) {
       s.total_phases,
       t.verification
     ),
+    schema_errors: s.schema_errors && s.schema_errors.length ? s.schema_errors : undefined,
   });
 }
 
@@ -266,6 +316,16 @@ function cmdTransition(opts) {
   if (!t || !s) {
     return output(
       fail("NO_PROJECT", "No .planning/ found. Run /qualia-new.")
+    );
+  }
+
+  // Refuse transitions if STATE.md has schema errors (severity=error)
+  if (s.schema_errors && s.schema_errors.some((e) => e.severity === "error")) {
+    return output(
+      fail(
+        "STATE_SCHEMA_ERROR",
+        "STATE.md is malformed. Run `node state.js check` to see errors. Consider `state.js fix` to rewrite canonically."
+      )
     );
   }
 
@@ -466,6 +526,77 @@ function cmdInit(opts) {
   });
 }
 
+function cmdFix(opts) {
+  const raw = readState();
+  const t = readTracking();
+  if (!raw && !t) {
+    return output(
+      fail("NO_PROJECT", "No .planning/ found. Run /qualia-new.")
+    );
+  }
+  const parsed = parseStateMd(raw) || {
+    phase: 1,
+    total_phases: 1,
+    phase_name: "",
+    status: "setup",
+    assigned_to: "",
+    phases: [],
+    schema_errors: [
+      { field: "content", message: "STATE.md missing or empty", severity: "error" },
+    ],
+  };
+  const previousErrors = (parsed.schema_errors || []).length;
+
+  // Prefer tracking.json values when parsed fields are defaulted/missing
+  const tr = t || {};
+  const totalPhases =
+    parseInt(tr.total_phases) || parsed.total_phases || parsed.phases.length || 1;
+  const phaseNum = parseInt(tr.phase) || parsed.phase || 1;
+  const phaseName =
+    (parsed.phase_name && parsed.phase_name.trim()) ||
+    tr.phase_name ||
+    `Phase ${phaseNum}`;
+  const status = parsed.status || tr.status || "setup";
+  const assignedTo = parsed.assigned_to || tr.assigned_to || "";
+
+  // Build a phases array of the right length
+  const phases = [];
+  for (let i = 0; i < totalPhases; i++) {
+    const existing = parsed.phases[i];
+    phases.push({
+      num: i + 1,
+      name: existing?.name || `Phase ${i + 1}`,
+      goal: existing?.goal || "TBD",
+      status: existing?.status || (i === 0 ? "ready" : "—"),
+    });
+  }
+
+  const s = {
+    phase: phaseNum,
+    total_phases: totalPhases,
+    phase_name: phaseName,
+    status,
+    assigned_to: assignedTo,
+    last_activity: "STATE.md repaired by state.js fix",
+    phases,
+    blockers: "None.",
+    resume: "—",
+  };
+
+  try {
+    writeStateMd(s);
+  } catch (e) {
+    return output(fail("WRITE_ERROR", e.message));
+  }
+
+  output({
+    ok: true,
+    action: "fix",
+    previous_errors: previousErrors,
+    fixed: true,
+  });
+}
+
 // ─── Output ──────────────────────────────────────────────
 function output(obj) {
   console.log(JSON.stringify(obj, null, 2));
@@ -486,11 +617,14 @@ switch (cmd) {
   case "init":
     cmdInit(opts);
     break;
+  case "fix":
+    cmdFix(opts);
+    break;
   default:
     output(
       fail(
         "UNKNOWN_COMMAND",
-        `Usage: state.js <check|transition|init> [--options]`
+        `Usage: state.js <check|transition|init|fix> [--options]`
       )
     );
 }

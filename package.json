@@ -1,6 +1,6 @@
 {
   "name": "qualia-framework-v2",
-  "version": "2.8.1",
+  "version": "2.9.0",
   "description": "Claude Code workflow framework by Qualia Solutions. Plan, build, verify, ship.",
   "bin": {
     "qualia-framework-v2": "./bin/cli.js"
@@ -23,7 +23,7 @@
   },
   "homepage": "https://github.com/Qualiasolutions/qualia-framework-v2#readme",
   "scripts": {
-    "test": "bash tests/hooks.test.sh && bash tests/state.test.sh"
+    "test": "bash tests/hooks.test.sh && bash tests/state.test.sh && bash tests/bin.test.sh && bash tests/statusline.test.sh"
   },
   "files": [
     "bin/",
