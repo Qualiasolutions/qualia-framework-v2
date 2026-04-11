@@ -62,7 +62,7 @@ function cmdVersion() {
     // interpolation. stdio: "ignore" on stderr silences any npm warnings
     // (offline, proxy, etc.) without a shell redirect. shell: true on
     // Windows because `npm` is a .cmd shim that only resolves through cmd.
-    const r = spawnSync("npm", ["view", "qualia-framework-v2", "version"], {
+    const r = spawnSync("npm", ["view", "qualia-framework", "version"], {
       stdio: ["ignore", "pipe", "ignore"],
       shell: process.platform === "win32",
       timeout: 5000,
@@ -77,7 +77,7 @@ function cmdVersion() {
     if (latest && semverGt(latest, PKG.version)) {
       console.log("");
       console.log(`  ${YELLOW}Update available:${RESET} ${WHITE}${latest}${RESET}`);
-      console.log(`  ${DIM}Run:${RESET} npx qualia-framework-v2 update`);
+      console.log(`  ${DIM}Run:${RESET} npx qualia-framework update`);
     } else if (latest) {
       console.log(`  ${DIM}Latest:${RESET}     ${GREEN}${latest} ✓${RESET} ${DIM}(up to date)${RESET}`);
     }
@@ -102,7 +102,7 @@ function cmdUpdate() {
   console.log("");
 
   try {
-    const r = spawnSync("npx", ["qualia-framework-v2@latest", "install"], {
+    const r = spawnSync("npx", ["qualia-framework@latest", "install"], {
       input: cfg.code + "\n",
       stdio: ["pipe", "inherit", "inherit"],
       shell: process.platform === "win32",  // npx is a .cmd shim on Windows — must go through shell
@@ -110,12 +110,12 @@ function cmdUpdate() {
       encoding: "utf8",
     });
     if (r.status !== 0) {
-      console.log(`  ${RED}✗${RESET} Update failed. Run manually: npx qualia-framework-v2@latest install`);
+      console.log(`  ${RED}✗${RESET} Update failed. Run manually: npx qualia-framework@latest install`);
       process.exit(1);
     }
   } catch (e) {
     console.log(`  ${RED}✗${RESET} Update failed: ${e.message}`);
-    console.log(`  ${DIM}Run manually:${RESET} npx qualia-framework-v2@latest install`);
+    console.log(`  ${DIM}Run manually:${RESET} npx qualia-framework@latest install`);
     process.exit(1);
   }
 }
@@ -434,7 +434,7 @@ function cmdTeam() {
     case "add": {
       const args = parseTeamArgs(process.argv.slice(4));
       if (!args.code || !args.name) {
-        console.log(`  ${RED}Usage:${RESET} qualia-framework-v2 team add --code QS-NAME-NN --name "Full Name" [--role EMPLOYEE|OWNER]`);
+        console.log(`  ${RED}Usage:${RESET} qualia-framework team add --code QS-NAME-NN --name "Full Name" [--role EMPLOYEE|OWNER]`);
         process.exit(1);
       }
       const team = readTeamFile() || getDefaultTeam();
@@ -455,7 +455,7 @@ function cmdTeam() {
     case "remove": {
       const code = (process.argv[4] || "").toUpperCase();
       if (!code) {
-        console.log(`  ${RED}Usage:${RESET} qualia-framework-v2 team remove QS-NAME-NN`);
+        console.log(`  ${RED}Usage:${RESET} qualia-framework team remove QS-NAME-NN`);
         process.exit(1);
       }
       const team = readTeamFile();
@@ -470,7 +470,7 @@ function cmdTeam() {
     }
 
     default:
-      console.log(`  ${RED}Usage:${RESET} qualia-framework-v2 team <list|add|remove>`);
+      console.log(`  ${RED}Usage:${RESET} qualia-framework team <list|add|remove>`);
       process.exit(1);
   }
 }
@@ -508,16 +508,242 @@ function cmdTraces() {
   console.log("");
 }
 
+// ─── Migrate ────────────────────────────────────────────
+
+function cmdMigrate() {
+  banner();
+  console.log("");
+
+  const settingsPath = path.join(CLAUDE_DIR, "settings.json");
+  if (!fs.existsSync(settingsPath)) {
+    console.log(`  ${RED}✗${RESET} No settings.json found. Run ${TEAL}qualia-framework install${RESET} first.`);
+    console.log("");
+    process.exit(1);
+  }
+
+  let settings;
+  try {
+    settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+  } catch (e) {
+    console.log(`  ${RED}✗${RESET} Failed to parse settings.json: ${e.message}`);
+    process.exit(1);
+  }
+
+  const cfg = readConfig();
+  const fromVersion = cfg.version || "unknown";
+  let changes = 0;
+
+  console.log(`  ${DIM}Current version:${RESET} ${WHITE}${fromVersion}${RESET}`);
+  console.log(`  ${DIM}Target version:${RESET}  ${WHITE}${PKG.version}${RESET}`);
+  console.log("");
+
+  // 1. Ensure all 8 hooks are wired (v2 missed block-env-edit and branch-guard)
+  const hd = path.join(CLAUDE_DIR, "hooks");
+  const nodeCmd = (hookFile) => `node "${path.join(hd, hookFile)}"`;
+
+  if (!settings.hooks) settings.hooks = {};
+
+  // Check SessionStart hooks
+  if (!settings.hooks.SessionStart || !Array.isArray(settings.hooks.SessionStart)) {
+    settings.hooks.SessionStart = [{ matcher: ".*", hooks: [{ type: "command", command: nodeCmd("session-start.js"), timeout: 5 }] }];
+    changes++;
+    console.log(`  ${GREEN}+${RESET} Added SessionStart hook`);
+  }
+
+  // Check PreToolUse hooks — ensure all critical hooks are present
+  const requiredBashHooks = ["auto-update.js", "branch-guard.js", "pre-push.js", "pre-deploy-gate.js"];
+  const requiredEditHooks = ["block-env-edit.js", "migration-guard.js"];
+
+  if (!settings.hooks.PreToolUse) settings.hooks.PreToolUse = [];
+
+  // Find or create Bash matcher entry
+  let bashEntry = settings.hooks.PreToolUse.find(e => e.matcher === "Bash");
+  if (!bashEntry) {
+    bashEntry = { matcher: "Bash", hooks: [] };
+    settings.hooks.PreToolUse.push(bashEntry);
+  }
+  if (!bashEntry.hooks) bashEntry.hooks = [];
+
+  for (const hookFile of requiredBashHooks) {
+    const cmd = nodeCmd(hookFile);
+    const exists = bashEntry.hooks.some(h => h.command && h.command.includes(hookFile));
+    if (!exists) {
+      const hookDef = { type: "command", command: cmd, timeout: hookFile === "pre-deploy-gate.js" ? 180 : 5 };
+      if (hookFile === "branch-guard.js") hookDef.if = "Bash(git push*)";
+      if (hookFile === "pre-push.js") { hookDef.if = "Bash(git push*)"; hookDef.timeout = 15; }
+      if (hookFile === "pre-deploy-gate.js") hookDef.if = "Bash(vercel --prod*)";
+      bashEntry.hooks.push(hookDef);
+      changes++;
+      console.log(`  ${GREEN}+${RESET} Wired ${hookFile} into PreToolUse/Bash`);
+    }
+  }
+
+  // Find or create Edit|Write matcher entry
+  let editEntry = settings.hooks.PreToolUse.find(e => e.matcher === "Edit|Write");
+  if (!editEntry) {
+    editEntry = { matcher: "Edit|Write", hooks: [] };
+    settings.hooks.PreToolUse.push(editEntry);
+  }
+  if (!editEntry.hooks) editEntry.hooks = [];
+
+  for (const hookFile of requiredEditHooks) {
+    const cmd = nodeCmd(hookFile);
+    const exists = editEntry.hooks.some(h => h.command && h.command.includes(hookFile));
+    if (!exists) {
+      const hookDef = { type: "command", command: cmd, timeout: hookFile === "migration-guard.js" ? 10 : 5 };
+      if (hookFile === "migration-guard.js") hookDef.if = "Edit(*migration*)|Write(*migration*)|Edit(*.sql)|Write(*.sql)";
+      editEntry.hooks.push(hookDef);
+      changes++;
+      console.log(`  ${GREEN}+${RESET} Wired ${hookFile} into PreToolUse/Edit|Write`);
+    }
+  }
+
+  // Check PreCompact hook
+  if (!settings.hooks.PreCompact) {
+    settings.hooks.PreCompact = [{ matcher: "compact", hooks: [{ type: "command", command: nodeCmd("pre-compact.js"), timeout: 15 }] }];
+    changes++;
+    console.log(`  ${GREEN}+${RESET} Added PreCompact hook`);
+  }
+
+  // 2. Ensure env vars are up to date
+  if (!settings.env) settings.env = {};
+  const requiredEnv = {
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
+    CLAUDE_CODE_DISABLE_AUTO_MEMORY: "0",
+    MAX_MCP_OUTPUT_TOKENS: "25000",
+    CLAUDE_CODE_NO_FLICKER: "1",
+  };
+  for (const [k, v] of Object.entries(requiredEnv)) {
+    if (settings.env[k] !== v) {
+      settings.env[k] = v;
+      changes++;
+      console.log(`  ${GREEN}+${RESET} Set env.${k}`);
+    }
+  }
+
+  // 3. Update status line if missing
+  if (!settings.statusLine) {
+    settings.statusLine = { type: "command", command: `node "${path.join(CLAUDE_DIR, "bin", "statusline.js")}"` };
+    changes++;
+    console.log(`  ${GREEN}+${RESET} Added status line`);
+  }
+
+  // 4. Update config version
+  cfg.version = PKG.version;
+  cfg.migrated_at = new Date().toISOString().split("T")[0];
+  writeConfig(cfg);
+
+  // Write settings
+  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n");
+
+  console.log("");
+  if (changes === 0) {
+    console.log(`  ${GREEN}✓${RESET} Already up to date — no migration needed.`);
+  } else {
+    console.log(`  ${GREEN}✓${RESET} Applied ${WHITE}${changes}${RESET} changes. Restart Claude Code to take effect.`);
+  }
+  console.log("");
+}
+
+// ─── Analytics ──────────────────────────────────────────
+
+function cmdAnalytics() {
+  banner();
+  console.log("");
+
+  const tracesDir = path.join(CLAUDE_DIR, ".qualia-traces");
+  if (!fs.existsSync(tracesDir)) {
+    console.log(`  ${DIM}No traces found. Analytics require hook telemetry data.${RESET}`);
+    console.log(`  ${DIM}Traces are collected automatically during normal framework use.${RESET}`);
+    console.log("");
+    return;
+  }
+
+  const files = fs.readdirSync(tracesDir).filter(f => f.endsWith(".jsonl")).sort();
+  if (files.length === 0) {
+    console.log(`  ${DIM}No trace data yet.${RESET}`);
+    console.log("");
+    return;
+  }
+
+  // Parse all traces
+  const traces = [];
+  for (const file of files) {
+    const lines = fs.readFileSync(path.join(tracesDir, file), "utf8").trim().split("\n");
+    for (const line of lines) {
+      try { traces.push(JSON.parse(line)); } catch {}
+    }
+  }
+
+  // Aggregate stats
+  const hookStats = {};
+  let totalBlocks = 0;
+  let totalAllows = 0;
+  let totalDuration = 0;
+
+  for (const t of traces) {
+    const hook = t.hook || "unknown";
+    if (!hookStats[hook]) hookStats[hook] = { allow: 0, block: 0, total_ms: 0 };
+    if (t.result === "block") { hookStats[hook].block++; totalBlocks++; }
+    else { hookStats[hook].allow++; totalAllows++; }
+    hookStats[hook].total_ms += t.duration_ms || 0;
+    totalDuration += t.duration_ms || 0;
+  }
+
+  // Verification outcomes (from traces that include verification data)
+  const verifications = traces.filter(t => t.hook === "state-transition" && t.extra && t.extra.verification);
+  const passes = verifications.filter(t => t.extra.verification === "pass").length;
+  const fails = verifications.filter(t => t.extra.verification === "fail").length;
+
+  // Gap cycle data
+  const gapTraces = traces.filter(t => t.hook === "state-transition" && t.extra && t.extra.gap_closure);
+  const totalGapCycles = gapTraces.length;
+
+  // Display
+  console.log(`  ${WHITE}Framework Analytics${RESET}`);
+  console.log(`  ${DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}`);
+  console.log("");
+  console.log(`  ${WHITE}Overview${RESET}`);
+  console.log(`  ${DIM}Trace files:${RESET}       ${WHITE}${files.length}${RESET} ${DIM}(${files[0]} → ${files[files.length - 1]})${RESET}`);
+  console.log(`  ${DIM}Total events:${RESET}      ${WHITE}${traces.length}${RESET}`);
+  console.log(`  ${DIM}Total blocks:${RESET}      ${RED}${totalBlocks}${RESET}`);
+  console.log(`  ${DIM}Total allows:${RESET}      ${GREEN}${totalAllows}${RESET}`);
+  console.log(`  ${DIM}Avg hook time:${RESET}     ${WHITE}${traces.length ? Math.round(totalDuration / traces.length) : 0}ms${RESET}`);
+  console.log("");
+
+  // Verification stats
+  if (passes + fails > 0) {
+    const rate = Math.round((passes / (passes + fails)) * 100);
+    console.log(`  ${WHITE}Verification Outcomes${RESET}`);
+    console.log(`  ${DIM}First-pass rate:${RESET}   ${rate >= 70 ? GREEN : rate >= 50 ? YELLOW : RED}${rate}%${RESET} ${DIM}(${passes} pass / ${fails} fail)${RESET}`);
+    console.log(`  ${DIM}Gap cycles:${RESET}        ${WHITE}${totalGapCycles}${RESET}`);
+    console.log("");
+  }
+
+  // Per-hook breakdown
+  console.log(`  ${WHITE}Per-Hook Breakdown${RESET}`);
+  const sorted = Object.entries(hookStats).sort((a, b) => (b[1].allow + b[1].block) - (a[1].allow + a[1].block));
+  for (const [hook, stats] of sorted) {
+    const total = stats.allow + stats.block;
+    const avg = Math.round(stats.total_ms / total);
+    const blockRate = stats.block > 0 ? ` ${RED}${stats.block} blocked${RESET}` : "";
+    console.log(`  ${DIM}${hook}:${RESET} ${WHITE}${total}${RESET} calls, ${DIM}avg ${avg}ms${RESET}${blockRate}`);
+  }
+  console.log("");
+}
+
 function cmdHelp() {
   banner();
   console.log("");
   console.log(`  ${WHITE}Commands:${RESET}`);
-  console.log(`    npx qualia-framework-v2 ${TEAL}install${RESET}     Install or reinstall the framework`);
-  console.log(`    npx qualia-framework-v2 ${TEAL}update${RESET}      Update to the latest version`);
-  console.log(`    npx qualia-framework-v2 ${TEAL}version${RESET}     Show installed version + check for updates`);
-  console.log(`    npx qualia-framework-v2 ${TEAL}uninstall${RESET}   Clean removal from ~/.claude/ (${DIM}-y to skip prompts${RESET})`);
-  console.log(`    npx qualia-framework-v2 ${TEAL}team${RESET}        Manage team members (${DIM}list|add|remove${RESET})`);
-  console.log(`    npx qualia-framework-v2 ${TEAL}traces${RESET}      View recent hook telemetry`);
+  console.log(`    qualia-framework ${TEAL}install${RESET}      Install or reinstall the framework`);
+  console.log(`    qualia-framework ${TEAL}update${RESET}       Update to the latest version`);
+  console.log(`    qualia-framework ${TEAL}version${RESET}      Show installed version + check for updates`);
+  console.log(`    qualia-framework ${TEAL}uninstall${RESET}    Clean removal from ~/.claude/ (${DIM}-y to skip prompts${RESET})`);
+  console.log(`    qualia-framework ${TEAL}migrate${RESET}      Migrate settings from v2 to v3`);
+  console.log(`    qualia-framework ${TEAL}team${RESET}         Manage team members (${DIM}list|add|remove${RESET})`);
+  console.log(`    qualia-framework ${TEAL}traces${RESET}       View recent hook telemetry`);
+  console.log(`    qualia-framework ${TEAL}analytics${RESET}    Show outcome scoring & gap cycle stats`);
   console.log("");
   console.log(`  ${WHITE}After install:${RESET}`);
   console.log(`    ${TG}/qualia${RESET}          What should I do next?`);
@@ -532,6 +758,7 @@ function cmdHelp() {
   console.log(`    ${TG}/qualia-report${RESET}   Log your work`);
   console.log("");
 }
+
 
 // ─── Main ────────────────────────────────────────────────
 const cmd = process.argv[2];
@@ -561,6 +788,13 @@ switch (cmd) {
     break;
   case "traces":
     cmdTraces();
+    break;
+  case "migrate":
+    cmdMigrate();
+    break;
+  case "analytics":
+  case "stats":
+    cmdAnalytics();
     break;
   default:
     cmdHelp();
