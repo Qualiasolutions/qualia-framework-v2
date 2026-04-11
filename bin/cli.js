@@ -145,8 +145,8 @@ const QUALIA_AGENT_FILES = ["planner.md", "builder.md", "verifier.md", "qa-brows
 // 3 Qualia bin scripts.
 const QUALIA_BIN_FILES = ["state.js", "qualia-ui.js", "statusline.js"];
 
-// 4 Qualia rules.
-const QUALIA_RULE_FILES = ["security.md", "frontend.md", "design-reference.md", "deployment.md"];
+// 5 Qualia rules.
+const QUALIA_RULE_FILES = ["security.md", "frontend.md", "design-reference.md", "deployment.md", "infrastructure.md"];
 
 function promptYesNo(question, defaultYes) {
   return new Promise((resolve) => {

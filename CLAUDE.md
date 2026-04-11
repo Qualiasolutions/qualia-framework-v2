@@ -4,7 +4,7 @@
 Qualia Solutions — Nicosia, Cyprus. Websites, AI agents, voice agents, AI automation.
 
 ## Stack
-Next.js 16+, React 19, TypeScript, Supabase, Vercel. Voice: VAPI, ElevenLabs, Telnyx, Retell AI. AI: OpenRouter.
+Next.js 16+, React 19, TypeScript, Supabase, Vercel. Voice: Retell AI, ElevenLabs, Telnyx. AI: OpenRouter. Compute: Railway (agents/background jobs). See `rules/infrastructure.md` for full details.
 
 ## Role: {{ROLE}}
 {{ROLE_DESCRIPTION}}
@@ -19,6 +19,7 @@ Next.js 16+, React 19, TypeScript, Supabase, Vercel. Voice: VAPI, ElevenLabs, Te
 - See `rules/security.md` for auth, RLS, Zod, secrets
 - See `rules/frontend.md` for design standards
 - See `rules/deployment.md` for deploy checklist
+- See `rules/infrastructure.md` for services, APIs, GitHub orgs, Vercel teams
 
 ## The Road (how projects flow)
 
