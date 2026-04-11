@@ -46,17 +46,40 @@ What did you learn?
 3. Client preference — client-specific requirement
 ```
 
-### 2. Format Entry
+### 2. Check for Duplicates
+
+Before saving, check if a similar entry already exists:
+
+```bash
+# Search for the title (case-insensitive substring match)
+grep -i "{title keywords}" ~/.claude/knowledge/{type}.md 2>/dev/null
+```
+
+If a near-match exists (title is similar to an existing entry):
+- Show the existing entry to the user
+- Ask: "A similar entry exists. Update it, create a new one, or skip?"
+- If update: replace the existing entry. If new: append. If skip: done.
+
+### 3. Format Entry
+
+Each entry gets a unique ID and ISO timestamp for dedup and ordering:
 
 ```markdown
-### {Title} ({date})
+
+---
+
+### {Title}
+**ID:** {random 8-char hex, e.g. a3f7c1e9}
+**Date:** {ISO 8601, e.g. 2026-04-11}
 **Project:** {current project name or "general"}
 **Context:** {brief context — what you were building when you learned this}
 
 {The learning — be specific enough that future-you understands without context}
 ```
 
-### 3. Append to Knowledge File
+### 4. Append to Knowledge File
+
+Append-only — never overwrite the file, always add at the end:
 
 ```bash
 # Append to the right file
@@ -67,7 +90,7 @@ echo "{formatted entry}" >> ~/.claude/knowledge/{type}.md
 - Fix → `~/.claude/knowledge/common-fixes.md`
 - Client pref → `~/.claude/knowledge/client-prefs.md`
 
-### 4. Confirm
+### 5. Confirm
 
 ```
 ⬢ Saved to {file}

@@ -73,26 +73,35 @@ git commit -m "report: session {YYYY-MM-DD}"
 git push
 ```
 
-### 5. Upload to ERP
+### 5. Upload to ERP (if enabled)
 
-**This step is MANDATORY** — the clock-out modal requires the report to be uploaded.
+Read `~/.claude/.qualia-config.json` and check the `erp` object:
+- If `erp.enabled` is `false`, skip this step and print: "ERP upload skipped (disabled in config)."
+- If `erp.enabled` is `true` (default) or the `erp` field is missing (backward compatibility), proceed with the upload.
 
 ```bash
-ERP_URL="https://portal.qualiasolutions.net"
+# Read ERP config
+ERP_URL=$(node -e "try{const c=JSON.parse(require('fs').readFileSync(require('os').homedir()+'/.claude/.qualia-config.json','utf8'));console.log(c.erp?.url||'https://portal.qualiasolutions.net')}catch{console.log('https://portal.qualiasolutions.net')}")
+ERP_ENABLED=$(node -e "try{const c=JSON.parse(require('fs').readFileSync(require('os').homedir()+'/.claude/.qualia-config.json','utf8'));console.log(c.erp?.enabled!==false)}catch{console.log('true')}")
+
 API_KEY=$(cat ~/.claude/.erp-api-key 2>/dev/null)
 REPORT_FILE=".planning/reports/report-{date}.md"
 EMAIL=$(git config user.email)
 PROJECT=$(basename $(pwd))
 
-curl -s -X POST "$ERP_URL/api/claude/report-upload" \
-  -H "X-API-Key: $API_KEY" \
-  -F "file=@$REPORT_FILE" \
-  -F "employee_email=$EMAIL" \
-  -F "project_name=$PROJECT"
+# Only upload if ERP is enabled
+if [ "$ERP_ENABLED" = "true" ]; then
+  curl -s -X POST "$ERP_URL/api/claude/report-upload" \
+    -H "X-API-Key: $API_KEY" \
+    -F "file=@$REPORT_FILE" \
+    -F "employee_email=$EMAIL" \
+    -F "project_name=$PROJECT"
+fi
 ```
 
 If the upload succeeds, print: "Report uploaded to ERP. You can now clock out."
 If it fails (no API key, network error), print the error and tell the employee to ask Fawzi.
+If ERP is disabled, print: "ERP upload skipped (disabled in config)."
 
 ### 6. Update State
 

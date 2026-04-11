@@ -332,7 +332,11 @@ async function cmdUninstall() {
   safeUnlink(path.join(CLAUDE_DIR, ".qualia-config.json"), counters);
   safeUnlink(path.join(CLAUDE_DIR, ".qualia-last-update-check"), counters);
   safeUnlink(path.join(CLAUDE_DIR, ".erp-api-key"), counters);
+  safeUnlink(path.join(CLAUDE_DIR, ".qualia-team.json"), counters);
   safeUnlink(path.join(CLAUDE_DIR, "qualia-guide.md"), counters);
+
+  // Traces directory.
+  safeRmDir(path.join(CLAUDE_DIR, ".qualia-traces"), counters);
 
   // Clean settings.json surgically.
   cleanSettingsJson(counters);
@@ -367,6 +371,143 @@ async function cmdUninstall() {
   console.log("");
 }
 
+// ─── Team Management ────────────────────────────────────
+// External team file at ~/.claude/.qualia-team.json.
+// Falls back to embedded defaults in install.js.
+
+function getDefaultTeam() {
+  return {
+    "QS-FAWZI-01": { name: "Fawzi Goussous", role: "OWNER", description: "Company owner. Full access. Can push to main, approve deploys, edit secrets." },
+    "QS-HASAN-02": { name: "Hasan", role: "EMPLOYEE", description: "Developer. Feature branches only. Cannot push to main or edit .env files." },
+    "QS-MOAYAD-03": { name: "Moayad", role: "EMPLOYEE", description: "Developer. Feature branches only. Cannot push to main or edit .env files." },
+    "QS-RAMA-04": { name: "Rama", role: "EMPLOYEE", description: "Developer. Feature branches only. Cannot push to main or edit .env files." },
+    "QS-SALLY-05": { name: "Sally", role: "EMPLOYEE", description: "Developer. Feature branches only. Cannot push to main or edit .env files." },
+  };
+}
+
+function readTeamFile() {
+  const teamFile = path.join(CLAUDE_DIR, ".qualia-team.json");
+  try {
+    if (fs.existsSync(teamFile)) {
+      const data = JSON.parse(fs.readFileSync(teamFile, "utf8"));
+      if (data && typeof data === "object" && Object.keys(data).length > 0) return data;
+    }
+  } catch {}
+  return null;
+}
+
+function writeTeamFile(team) {
+  if (!fs.existsSync(CLAUDE_DIR)) fs.mkdirSync(CLAUDE_DIR, { recursive: true });
+  fs.writeFileSync(path.join(CLAUDE_DIR, ".qualia-team.json"), JSON.stringify(team, null, 2) + "\n");
+}
+
+function parseTeamArgs(argv) {
+  const args = {};
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === "--code" && argv[i + 1]) { args.code = argv[++i]; }
+    else if (argv[i] === "--name" && argv[i + 1]) { args.name = argv[++i]; }
+    else if (argv[i] === "--role" && argv[i + 1]) { args.role = argv[++i].toUpperCase(); }
+  }
+  return args;
+}
+
+function cmdTeam() {
+  const sub = process.argv[3];
+
+  switch (sub) {
+    case "list": {
+      banner();
+      console.log("");
+      const team = readTeamFile();
+      const source = team || getDefaultTeam();
+      const label = team ? "team file" : "embedded defaults";
+      console.log(`  ${DIM}Source: ${label}${RESET}`);
+      console.log("");
+      for (const [code, member] of Object.entries(source)) {
+        const roleColor = member.role === "OWNER" ? TEAL : WHITE;
+        console.log(`  ${WHITE}${code}${RESET}  ${roleColor}${member.role}${RESET}  ${DIM}${member.name}${RESET}`);
+      }
+      console.log("");
+      break;
+    }
+
+    case "add": {
+      const args = parseTeamArgs(process.argv.slice(4));
+      if (!args.code || !args.name) {
+        console.log(`  ${RED}Usage:${RESET} qualia-framework-v2 team add --code QS-NAME-NN --name "Full Name" [--role EMPLOYEE|OWNER]`);
+        process.exit(1);
+      }
+      const team = readTeamFile() || getDefaultTeam();
+      const code = args.code.toUpperCase();
+      const role = args.role || "EMPLOYEE";
+      team[code] = {
+        name: args.name,
+        role,
+        description: role === "OWNER"
+          ? "Company owner. Full access. Can push to main, approve deploys, edit secrets."
+          : "Developer. Feature branches only. Cannot push to main or edit .env files.",
+      };
+      writeTeamFile(team);
+      console.log(`  ${GREEN}+${RESET} ${WHITE}${code}${RESET} ${DIM}(${args.name}, ${role})${RESET}`);
+      break;
+    }
+
+    case "remove": {
+      const code = (process.argv[4] || "").toUpperCase();
+      if (!code) {
+        console.log(`  ${RED}Usage:${RESET} qualia-framework-v2 team remove QS-NAME-NN`);
+        process.exit(1);
+      }
+      const team = readTeamFile();
+      if (!team || !team[code]) {
+        console.log(`  ${YELLOW}!${RESET} ${code} not found in team file.`);
+        process.exit(1);
+      }
+      delete team[code];
+      writeTeamFile(team);
+      console.log(`  ${RED}-${RESET} ${WHITE}${code}${RESET} removed`);
+      break;
+    }
+
+    default:
+      console.log(`  ${RED}Usage:${RESET} qualia-framework-v2 team <list|add|remove>`);
+      process.exit(1);
+  }
+}
+
+// ─── Traces ─────────────────────────────────────────────
+
+function cmdTraces() {
+  banner();
+  console.log("");
+  const tracesDir = path.join(CLAUDE_DIR, ".qualia-traces");
+  if (!fs.existsSync(tracesDir)) {
+    console.log(`  ${DIM}No traces found. Traces are written by hooks during normal operation.${RESET}`);
+    console.log("");
+    return;
+  }
+  const files = fs.readdirSync(tracesDir).filter((f) => f.endsWith(".jsonl")).sort().reverse();
+  if (files.length === 0) {
+    console.log(`  ${DIM}No trace files found.${RESET}`);
+    console.log("");
+    return;
+  }
+  const latest = path.join(tracesDir, files[0]);
+  const lines = fs.readFileSync(latest, "utf8").trim().split("\n").slice(-20);
+  console.log(`  ${WHITE}Recent traces${RESET} ${DIM}(${files[0]})${RESET}`);
+  console.log("");
+  for (const line of lines) {
+    try {
+      const e = JSON.parse(line);
+      const color = e.result === "block" ? RED : e.result === "allow" ? GREEN : DIM;
+      const time = (e.timestamp || "").split("T")[1] || "";
+      const ts = time.split(".")[0] || "";
+      console.log(`  ${DIM}${ts}${RESET}  ${color}${e.result}${RESET}  ${WHITE}${e.hook}${RESET}  ${DIM}${e.duration_ms || 0}ms${RESET}`);
+    } catch {}
+  }
+  console.log("");
+}
+
 function cmdHelp() {
   banner();
   console.log("");
@@ -375,6 +516,8 @@ function cmdHelp() {
   console.log(`    npx qualia-framework-v2 ${TEAL}update${RESET}      Update to the latest version`);
   console.log(`    npx qualia-framework-v2 ${TEAL}version${RESET}     Show installed version + check for updates`);
   console.log(`    npx qualia-framework-v2 ${TEAL}uninstall${RESET}   Clean removal from ~/.claude/ (${DIM}-y to skip prompts${RESET})`);
+  console.log(`    npx qualia-framework-v2 ${TEAL}team${RESET}        Manage team members (${DIM}list|add|remove${RESET})`);
+  console.log(`    npx qualia-framework-v2 ${TEAL}traces${RESET}      View recent hook telemetry`);
   console.log("");
   console.log(`  ${WHITE}After install:${RESET}`);
   console.log(`    ${TG}/qualia${RESET}          What should I do next?`);
@@ -412,6 +555,12 @@ switch (cmd) {
       console.error(`${RED}  ✗ Uninstall failed: ${e.message}${RESET}`);
       process.exit(1);
     });
+    break;
+  case "team":
+    cmdTeam();
+    break;
+  case "traces":
+    cmdTraces();
     break;
   default:
     cmdHelp();

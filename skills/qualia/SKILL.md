@@ -47,6 +47,7 @@ Use the state.js JSON output plus gathered context:
 | `handed-off` | status == "handed_off" | → `/qualia-report` then done |
 | `blocked` | STATE.md lists blockers or same error 3+ times | → Analyze, suggest `/qualia-debug` |
 | `bug-loop` | Same files edited 3+ times, user frustrated | → Different approach, `/qualia-debug` |
+| `need-tests` | User mentions "tests", "coverage", "test this" | → `/qualia-test` |
 
 **Employee escalation:** If role is EMPLOYEE and situation is `gap-limit` or `bug-loop`, suggest: "Want to flag this for Fawzi?"
 

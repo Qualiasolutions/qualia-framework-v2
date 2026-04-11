@@ -1,8 +1,10 @@
-# Qualia Framework v2
+# Qualia Framework v3
 
-A prompt orchestration framework for [Claude Code](https://claude.ai/code). It installs into `~/.claude/` and wraps your AI-assisted development workflow with structured planning, execution, verification, and deployment gates.
+A harness engineering framework for [Claude Code](https://claude.ai/code). It installs into `~/.claude/` and wraps your AI-assisted development workflow with structured planning, execution, verification, and deployment gates.
 
 It is not an application framework like Rails or Next.js. It doesn't generate code, run servers, or process data. It's an opinionated workflow layer that tells Claude how to plan, build, and verify your projects.
+
+v3 applies lessons from Anthropic's ["Harness Design for Long-Running Apps"](https://www.anthropic.com/engineering/harness-design-long-running-apps) article: scored evaluator rubrics, verification contracts, smarter guards, hook telemetry, and dynamic team management.
 
 ## Install
 
@@ -17,6 +19,9 @@ Enter your team code when prompted. Get your code from Fawzi.
 npx qualia-framework-v2 version    # Check installed version + updates
 npx qualia-framework-v2 update     # Update to latest (remembers your code)
 npx qualia-framework-v2 uninstall  # Clean removal from ~/.claude/
+npx qualia-framework-v2 team list  # Show team members
+npx qualia-framework-v2 team add   # Add a team member
+npx qualia-framework-v2 traces     # View recent hook telemetry
 ```
 
 ## Usage
@@ -66,7 +71,7 @@ Works on **Windows 10/11, macOS, and Linux**. Requires Node.js 18+ and Claude Co
 
 ### Goal-Backward Verification
 
-Most CI checks "did the task run." Qualia checks "does the outcome actually work." The verifier doesn't trust summaries — it greps the codebase for stubs, placeholders, unwired imports. When Claude says "I built the chat component," this catches the cases where it wrote a skeleton with `// TODO` inside.
+Most CI checks "did the task run." Qualia checks "does the outcome actually work." The verifier scores on 4 dimensions (Correctness, Completeness, Wiring, Quality), each 1-5, with a hard threshold at 3. It doesn't trust summaries — it greps the codebase for stubs, placeholders, unwired imports. The planner generates verification contracts (testable commands) that the verifier executes before ad-hoc checks.
 
 ### Agent Separation
 
@@ -84,7 +89,7 @@ All 8 hooks are real ops engineering, not theoretical. Highlights:
 
 ### Enforced State Machine
 
-Every workflow step calls `state.js` — a Node.js state machine that validates preconditions, updates both STATE.md and tracking.json atomically, and tracks gap-closure cycles. You can't build without planning, can't verify without building, and can't loop on gap-closure more than twice before escalating.
+Every workflow step calls `state.js` — a Node.js state machine that validates preconditions (including plan content), updates both STATE.md and tracking.json atomically, and tracks gap-closure cycles. The gap-closure limit is configurable per project (default: 2). A `--force` flag enables recovery after failed builds.
 
 ### Wave-Based Parallelization
 
@@ -106,10 +111,10 @@ npx qualia-framework-v2 install
   ├── hooks/           8 Node.js hooks — cross-platform (no bash dependency)
   ├── bin/             state.js (state machine) + qualia-ui.js (cosmetics library)
   ├── knowledge/       learned-patterns.md, common-fixes.md, client-prefs.md (loaded by plan/debug/new)
-  ├── rules/           security.md, frontend.md, deployment.md
+  ├── rules/           security.md, frontend.md, design-reference.md, deployment.md
   ├── qualia-templates/ tracking.json, state.md, project.md, plan.md, DESIGN.md
   ├── CLAUDE.md        global instructions (role-configured per team member)
-  └── statusline.sh    teal-branded 2-line status bar
+  └── statusline.js    teal-branded 2-line status bar
 ```
 
 ## For Qualia Solutions Team

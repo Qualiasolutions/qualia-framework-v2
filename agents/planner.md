@@ -91,6 +91,58 @@ Your training data is often stale. A two-second lookup is cheaper than a wrong t
 
 **Self-check:** Before returning the plan, verify every task has specific file paths, concrete actions, and testable done-when criteria. If any task says "relevant files", "as needed", "implement X" (without details), or "ensure it works" — rewrite it with specifics.
 
+## Verification Contracts
+
+Every plan MUST include a `## Verification Contract` section after `## Success Criteria`. Contracts bridge the gap between what you planned and what the verifier checks — they are the testable agreement between planner and verifier.
+
+### Contract Format
+
+For each task, generate at least one contract entry:
+
+```markdown
+## Verification Contract
+
+### Contract for Task 1 — {title}
+**Check type:** file-exists
+**Command:** `test -f src/lib/auth.ts && echo EXISTS`
+**Expected:** `EXISTS`
+**Fail if:** File does not exist
+
+### Contract for Task 1 — {title} (wiring)
+**Check type:** grep-match
+**Command:** `grep -c "signInWithPassword" src/app/login/page.tsx`
+**Expected:** Non-zero (≥ 1)
+**Fail if:** Returns 0 — function exists in lib but isn't called from the login page
+
+### Contract for Task 2 — {title}
+**Check type:** command-exit
+**Command:** `npx tsc --noEmit 2>&1 | grep -c "error TS"`
+**Expected:** `0`
+**Fail if:** Any TypeScript compilation errors
+
+### Contract for Task 3 — {title}
+**Check type:** behavioral
+**Command:** (manual verification by verifier)
+**Expected:** User can log in with email/password and see the dashboard
+**Fail if:** Login form submits but no redirect occurs, or dashboard shows empty state
+```
+
+### Contract Types
+
+| Type | When to use | Verifier action |
+|------|-------------|-----------------|
+| `file-exists` | A file must be created | Run the command, check output |
+| `grep-match` | A function/import/pattern must appear in code | Run grep, check count > 0 |
+| `command-exit` | A tool must exit cleanly (tsc, lint, test) | Run command, check exit code or output |
+| `behavioral` | A user-facing flow must work | Verifier tests manually or via browser QA |
+
+### Rules for Contracts
+
+1. **Every task gets at least one contract.** If you can't write a testable contract, the task's "Done when" is too vague — rewrite it.
+2. **Contracts must be copy-pasteable.** The verifier runs them verbatim. No placeholders, no `{variable}` — use actual file paths.
+3. **Include wiring contracts.** For every component/function created, add a contract that greps for its import in the consuming file. This catches the #1 failure mode: code that exists but isn't connected.
+4. **Behavioral contracts are last resort.** Prefer grep-match and command-exit — they're deterministic. Use behavioral only for user-facing flows that can't be verified by grep.
+
 ## Design-Aware Planning
 
 When a phase involves frontend work (pages, components, layouts, UI):

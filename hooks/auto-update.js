@@ -8,23 +8,43 @@ const path = require("path");
 const os = require("os");
 const { spawn, spawnSync } = require("child_process");
 
+const _traceStart = Date.now();
+
 const CLAUDE_DIR = path.join(os.homedir(), ".claude");
 const CACHE_FILE = path.join(CLAUDE_DIR, ".qualia-last-update-check");
 const CONFIG_FILE = path.join(CLAUDE_DIR, ".qualia-config.json");
 const LOCK_FILE = path.join(CLAUDE_DIR, ".qualia-updating");
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
+function _trace(hookName, result, extra) {
+  try {
+    const traceDir = path.join(os.homedir(), ".claude", ".qualia-traces");
+    if (!fs.existsSync(traceDir)) fs.mkdirSync(traceDir, { recursive: true });
+    const entry = {
+      hook: hookName,
+      result,
+      timestamp: new Date().toISOString(),
+      duration_ms: Date.now() - _traceStart,
+      ...extra,
+    };
+    const traceFile = path.join(traceDir, `${new Date().toISOString().split("T")[0]}.jsonl`);
+    fs.appendFileSync(traceFile, JSON.stringify(entry) + "\n");
+  } catch {}
+}
+
 try {
   // Fast path: recently checked
   if (fs.existsSync(CACHE_FILE)) {
     const last = Number(fs.readFileSync(CACHE_FILE, "utf8")) || 0;
     if (Date.now() - last * 1000 < MAX_AGE_MS) {
+      _trace("auto-update", "allow", { reason: "recently-checked" });
       process.exit(0);
     }
   }
 
   // Already updating
   if (fs.existsSync(LOCK_FILE)) {
+    _trace("auto-update", "allow", { reason: "already-updating" });
     process.exit(0);
   }
 
@@ -36,9 +56,13 @@ try {
   try {
     cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8"));
   } catch {
+    _trace("auto-update", "allow", { reason: "config-unreadable" });
     process.exit(0);
   }
-  if (!cfg.code || !cfg.version) process.exit(0);
+  if (!cfg.code || !cfg.version) {
+    _trace("auto-update", "allow", { reason: "config-incomplete" });
+    process.exit(0);
+  }
 
   // Fork the check-and-update into a detached background process so the hook
   // returns immediately and Claude Code is never blocked.
@@ -58,7 +82,7 @@ try {
         shell: process.platform === "win32",
       });
       const latest = ((r.stdout || "").trim());
-      if (!latest) { fs.unlinkSync(LOCK_FILE); return; }
+      if (!latest) { fs.unlinkSync(LOCK_FILE); process.exit(0); }
       const cmp = (a, b) => {
         const pa = a.split(".").map(Number), pb = b.split(".").map(Number);
         for (let i = 0; i < 3; i++) {
@@ -89,4 +113,5 @@ try {
   // Silent — never block the tool call
 }
 
+_trace("auto-update", "allow", { reason: "check-spawned" });
 process.exit(0);

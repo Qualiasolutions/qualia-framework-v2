@@ -40,10 +40,38 @@ For each success criterion in the plan:
 - Are database queries returning data to the UI?
 - This is where stubs hide.
 
+## Contract-Based Verification
+
+If the phase plan contains a `## Verification Contract` section, execute those contracts FIRST before any ad-hoc verification.
+
+### How Contracts Work
+
+The planner generates testable contracts for each task. Each contract is a specific check you run verbatim:
+
+```markdown
+### Contract for Task 1 — {title}
+**Check type:** file-exists | grep-match | command-exit | behavioral
+**Command:** {exact command to run}
+**Expected:** {what the output should be}
+**Fail if:** {what constitutes failure}
+```
+
+### Contract Execution
+
+1. Read the `## Verification Contract` section from the plan file
+2. For each contract entry, run the **Command** exactly as written
+3. Compare output against **Expected**
+4. Score: PASS if output matches expected, FAIL if it matches the fail condition
+5. Record results in the report under `## Contract Results`
+
+Contracts take priority over ad-hoc verification. If a contract covers a success criterion, use the contract result. Only fall back to the 3-level check (Truths → Artifacts → Wiring) for criteria NOT covered by contracts.
+
+If the plan has no `## Verification Contract` section (older plans), skip this step and proceed with the full 3-level check below.
+
 ## How to Verify
 
 ### 1. Read the Plan
-Extract success criteria from the phase plan's `## Success Criteria` section.
+Extract success criteria from the phase plan's `## Success Criteria` section. Also extract the `## Verification Contract` if present.
 
 ### 2. For Each Criterion, Run the 3-Level Check
 
@@ -111,12 +139,21 @@ gaps: {count of failures}
 
 # Phase {N} Verification
 
-## Results
+## Contract Results (if contracts exist in plan)
 
-| Criterion | Status | Evidence |
-|-----------|--------|----------|
-| {criterion 1} | PASS | {what you found} |
-| {criterion 2} | FAIL | {what's wrong} |
+| Task | Check | Command | Result | Notes |
+|------|-------|---------|--------|-------|
+| Task 1 | file-exists | `test -f src/lib/auth.ts` | PASS | File exists, 142 lines |
+| Task 2 | grep-match | `grep -c "signIn" src/lib/auth.ts` | PASS | 3 matches |
+
+## Scores
+
+| Criterion | Correctness | Completeness | Wiring | Quality | Verdict |
+|-----------|-------------|--------------|--------|---------|---------|
+| {criterion 1} | {1-5} | {1-5} | {1-5} | {1-5} | PASS/FAIL |
+| {criterion 2} | {1-5} | {1-5} | {1-5} | {1-5} | PASS/FAIL |
+
+**Minimum threshold check:** {any score < 3? If YES → FAIL}
 
 ## Code Quality
 - TypeScript: PASS/FAIL
@@ -125,28 +162,92 @@ gaps: {count of failures}
 - Unused imports: {count}
 
 ## Gaps (if any)
-1. {what failed and why}
-2. {what failed and why}
+1. {criterion}: {dimension} scored {score} — {what's wrong, what file, what's needed}
+2. {criterion}: {dimension} scored {score} — {what's wrong}
 
 ## Verdict
-PASS — Phase {N} goal achieved. Proceed to Phase {N+1}.
+PASS — Phase {N} goal achieved. All criteria scored ≥ 3 on all dimensions. Proceed to Phase {N+1}.
 OR
-FAIL — {N} gaps found. Run `/qualia-plan {N} --gaps` to fix.
+FAIL — {N} gaps found. {N} criteria scored below threshold. Run `/qualia-plan {N} --gaps` to fix.
 ```
 
-## Scoring
+## Scoring Rubric
 
-Each success criterion from the plan gets a verdict:
+Every success criterion is scored on 4 dimensions, each rated 1-5:
 
-- **PASS** — All 3 levels check out. File exists, has real implementation (not stubs), and is imported/used by the system.
-- **PARTIAL** — File exists and has real code, but isn't fully wired (e.g., component exists but isn't rendered in any page, API route exists but no client calls it). This is NOT a pass.
-- **FAIL** — File missing, is a stub, or has 0 connections to the rest of the codebase.
+### Correctness (1-5)
+Does it produce the right output?
+- **1** — Crashes, errors, or wrong output
+- **2** — Works for the happy path only; any deviation breaks it
+- **3** — Handles common edge cases (empty input, missing data, basic validation)
+- **4** — Handles most edge cases; error messages are user-friendly
+- **5** — Comprehensive error handling; graceful degradation; defensive coding
 
-Phase verdict:
-- **ALL PASS** → Phase verified. Update STATE.md status to "verified".
-- **ANY PARTIAL or FAIL** → Phase has gaps. List each gap with: what's wrong, what file, what's needed. Suggest `/qualia-plan {N} --gaps`.
+### Completeness (1-5)
+Were all contracted requirements met?
+- **1** — Less than half of the requirements implemented
+- **2** — Over half done, but significant gaps remain
+- **3** — All requirements present, but some are partial (e.g., UI exists but missing states)
+- **4** — All requirements fully implemented as specified
+- **5** — All requirements plus defensive coding, edge case coverage, and polish
 
-Never round up. A PARTIAL is not a PASS. The goal of verification is to catch the work that LOOKS done but ISN'T.
+### Wiring (1-5)
+Is everything connected end-to-end?
+- **1** — Files exist but are not imported anywhere
+- **2** — Imported but never called (dead code)
+- **3** — Called, but data flow is incomplete (e.g., API route exists, component calls it, but response isn't rendered)
+- **4** — Full data flow with minor gaps (e.g., loading state missing, error not surfaced)
+- **5** — Complete wiring verified by grep — every export is imported, every API is consumed, every component is rendered
+
+### Quality (1-5)
+Code quality, security, accessibility?
+- **1** — Stubs and placeholders throughout; `// TODO` everywhere
+- **2** — Works but violates project conventions (wrong patterns, hardcoded values, no types)
+- **3** — Follows conventions with minor issues (a few missing types, inconsistent naming)
+- **4** — Clean code; good patterns; types complete; security rules followed
+- **5** — Exemplary — accessible, performant, secure, well-structured, follows all rules
+
+### Hard Threshold
+
+**Any criterion scoring below 3 triggers FAIL regardless of other scores.**
+
+A component with Correctness=5, Completeness=5, Wiring=1, Quality=5 is FAIL — it's perfect code that nobody can use because it's not connected.
+
+### Phase Verdict
+- **ALL criteria ≥ 3 on all dimensions** → PASS. Phase verified.
+- **ANY criterion < 3 on ANY dimension** → FAIL. List each gap with: what scored low, what file, what's needed. Suggest `/qualia-plan {N} --gaps`.
+
+Never round up. A 2 is not a 3. The goal of verification is to catch the work that LOOKS done but ISN'T.
+
+## Few-Shot Calibration
+
+Use these examples to calibrate your judgment. Real verification should match this level of rigor.
+
+### Example A: PASS — Auth Phase
+
+Phase goal: "User can sign up, log in, and access protected routes."
+
+| Criterion | Score | Evidence |
+|-----------|-------|----------|
+| Correctness | 4 | `signInWithPassword()` called in handler; session persists across refresh; invalid credentials show error; tested login→dashboard→logout→login flow |
+| Completeness | 4 | Sign up, login, logout, protected route redirect all implemented; password validation with Zod; email verification flow present |
+| Wiring | 5 | `grep -r "signInWithPassword" src/` shows call in `app/login/page.tsx`; `grep -r "createClient" src/lib/` shows server client used in middleware; `grep -r "auth.uid" supabase/` shows RLS policies reference auth |
+| Quality | 4 | Server-side auth only; RLS on all tables; Zod validation on inputs; no service_role in client code; semantic HTML on forms; visible focus rings on inputs |
+
+**Verdict: PASS** — All scores ≥ 3. Minimum threshold check: NO scores below 3.
+
+### Example B: FAIL — Chat Component Phase
+
+Phase goal: "Working real-time chat interface with message history."
+
+| Criterion | Score | Evidence |
+|-----------|-------|----------|
+| Correctness | 4 | Chat component renders messages correctly; timestamps formatted; scroll-to-bottom works |
+| Completeness | 3 | Message send, receive, history all present; emoji support missing but not in spec |
+| Wiring | 1 | `grep -r "ChatWindow" app/` returns 0 results — component exists at `components/chat/ChatWindow.tsx` but is NOT rendered in any page. `grep -r "from.*chat" app/` returns 0. The component is an island. |
+| Quality | 3 | Clean code; types present; but no loading state, no error state, no empty state |
+
+**Verdict: FAIL** — Wiring scored 1 (below threshold of 3). The chat component is well-built code that nobody can access because it's not mounted in any route. This is the exact kind of "looks done but isn't" that verification exists to catch.
 
 ## Design Verification (for phases with frontend work)
 

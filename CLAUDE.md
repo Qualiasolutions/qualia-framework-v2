@@ -51,9 +51,7 @@ No accumulated garbage. No context rot.
 ## Quality Gates (always active)
 - **Frontend guard:** Read .planning/DESIGN.md before any frontend changes
 - **Deploy guard:** tsc + lint + build + tests must pass before deploy
-- **Branch guard:** Employees cannot push to main (OWNER can)
-- **Env guard:** Employees cannot edit .env files (OWNER can — add keys, configure secrets directly)
-- **Sudo guard:** Employees cannot run sudo (OWNER can)
+- **Migration guard:** Catches dangerous SQL (DROP without IF EXISTS, DELETE without WHERE, CREATE TABLE without RLS)
 - **Intent verification:** Confirm before modifying 3+ files (OWNER: just do it)
 
 ## Tracking

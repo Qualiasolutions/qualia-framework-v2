@@ -159,7 +159,7 @@ function cmdBanner(action, phase, subtitle) {
     const bar = progressBar(state.phase, state.total_phases);
     if (bar) console.log(`  ${pad(DIM + "Progress" + RESET, 20)}${bar}`);
     if (state.gap_cycles > 0) {
-      console.log(`  ${pad(DIM + "Gap cycles" + RESET, 20)}${YELLOW}${state.gap_cycles}/2${RESET}`);
+      console.log(`  ${pad(DIM + "Gap cycles" + RESET, 20)}${YELLOW}${state.gap_cycles}/${state.gap_cycle_limit || 2}${RESET}`);
     }
   }
 

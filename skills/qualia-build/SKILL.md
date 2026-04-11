@@ -21,6 +21,24 @@ cat .planning/phase-{N}-plan.md
 
 Parse: tasks, waves, file references.
 
+### 1b. Create Recovery Point
+
+Before executing any tasks, tag current HEAD for rollback:
+
+```bash
+git tag -f "pre-build-phase-{N}" HEAD 2>/dev/null
+```
+
+```bash
+node ~/.claude/bin/qualia-ui.js info "Recovery point: pre-build-phase-{N}"
+```
+
+If a wave fails and the user needs to roll back:
+```bash
+git reset --hard pre-build-phase-{N}
+node ~/.claude/bin/state.js transition --to planned --force
+```
+
 ### 2. Execute Waves
 
 ```bash

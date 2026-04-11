@@ -10,11 +10,30 @@ const path = require("path");
 const os = require("os");
 const { spawnSync } = require("child_process");
 
+const _traceStart = Date.now();
+
 const CONFIG = path.join(os.homedir(), ".claude", ".qualia-config.json");
+
+function _trace(hookName, result, extra) {
+  try {
+    const traceDir = path.join(os.homedir(), ".claude", ".qualia-traces");
+    if (!fs.existsSync(traceDir)) fs.mkdirSync(traceDir, { recursive: true });
+    const entry = {
+      hook: hookName,
+      result,
+      timestamp: new Date().toISOString(),
+      duration_ms: Date.now() - _traceStart,
+      ...extra,
+    };
+    const file = path.join(traceDir, `${new Date().toISOString().split("T")[0]}.jsonl`);
+    fs.appendFileSync(file, JSON.stringify(entry) + "\n");
+  } catch {}
+}
 
 function fail(msg) {
   console.log(msg);
-  process.exit(1);
+  _trace("branch-guard", "block", { reason: msg });
+  process.exit(2);
 }
 
 let role = "";
@@ -40,8 +59,10 @@ if (branch === "main" || branch === "master") {
   if (role !== "OWNER") {
     console.log(`BLOCKED: Employees cannot push to ${branch}. Create a feature branch first.`);
     console.log("Run: git checkout -b feature/your-feature-name");
-    process.exit(1);
+    _trace("branch-guard", "block", { reason: `non-owner push to ${branch}` });
+    process.exit(2);
   }
 }
 
+_trace("branch-guard", "allow");
 process.exit(0);
