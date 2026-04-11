@@ -8,6 +8,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Note: git tags for historical versions were not retained; commit references are approximate
 > and dates reflect commit history rather than npm publish timestamps.
 
+## [3.1.0] — 2026-04-12
+
+Package rename and gap closure release. The package is now `qualia-framework`
+(dropping the `-v2` suffix). Adds settings migration, skill outcome scoring,
+analytics, cross-platform tests, and fills all v3.0.0 gaps.
+
+### Changed
+- **Package renamed** `qualia-framework-v2` → `qualia-framework`. All CLI
+  commands are now `qualia-framework install`, `qualia-framework update`, etc.
+  The old name continues to work via npm alias.
+
+### Added
+- **`qualia-framework migrate`** — upgrades v2 settings to v3 without
+  reinstalling. Wires missing hooks, env vars, status line, and MCP config.
+- **`qualia-framework analytics`** — aggregates hook telemetry and shows
+  first-pass verification rate, gap cycles, per-hook breakdown.
+- **Skill outcome scoring** — state transitions now write trace entries to
+  `~/.claude/.qualia-traces/` for plan→outcome correlation tracking.
+- **Verification contract format validation** — `validate-plan` now checks
+  contract structure (check-type, command, expected, fail-if fields) with
+  warnings for invalid types or missing fields. Backward compatible.
+- **next-devtools-mcp integration** — install and migrate now configure
+  `next-devtools-mcp@0.3.10` as an MCP server for runtime error visibility
+  in Next.js 16+ projects.
+- **Cross-platform Node.js test runner** — 134 tests using `node:test`,
+  replacing bash-only test scripts. Works on Fedora, EndeavourOS, Windows.
+- **ERP API contract documentation** — `docs/erp-contract.md` specifying
+  endpoints, auth, request/response shapes, rate limits, and security.
+
+### Fixed
+- Contract validation regex in `validate-plan` — section extraction was
+  always returning empty due to `$` matching end-of-line in multiline mode.
+
 ## [3.0.0] — 2026-04-11
 
 Harness engineering release. Applies lessons from Anthropic's "Harness Design
