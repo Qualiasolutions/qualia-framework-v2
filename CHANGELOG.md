@@ -8,6 +8,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Note: git tags for historical versions were not retained; commit references are approximate
 > and dates reflect commit history rather than npm publish timestamps.
 
+## [3.0.0] — 2026-04-11
+
+Harness engineering release. Applies lessons from Anthropic's "Harness Design
+for Long-Running Apps" article. The verifier becomes a scored evaluator, the
+planner generates verification contracts, guards get smarter, and the harness
+gains observability.
+
+### Added
+- **Scored evaluator rubric** — verifier now scores on 4 dimensions
+  (Correctness, Completeness, Wiring, Quality), each 1-5. Hard threshold:
+  any score < 3 = FAIL. Two few-shot calibration examples included.
+- **Verification contracts** — planner generates testable contract entries
+  (`file-exists`, `grep-match`, `command-exit`, `behavioral`) per task.
+  Verifier executes contracts before ad-hoc verification.
+- **Plan content validation** — `state.js` now rejects plans with no task
+  headers or missing "Done when" criteria. New `validate-plan` subcommand.
+- **Configurable gap cycle limit** — default remains 2; override via
+  `tracking.json.gap_cycle_limit` or `PROJECT.md gap_cycle_limit:` field.
+- **Pre-deploy gate: Server Component detection** — `route.ts`,
+  `middleware.ts`, `app/api/` paths, and `"use server"` directive files are
+  now exempt from the service_role leak scan.
+- **Dynamic team management** — `qualia-framework-v2 team list|add|remove`
+  CLI commands. Team dict externalized to `~/.claude/.qualia-team.json`;
+  falls back to embedded defaults.
+- **ERP decoupling** — ERP config (`enabled`, `url`, `api_key_file`) stored
+  in `.qualia-config.json`. `/qualia-report` skips upload when disabled.
+- **Hook telemetry** — all 8 hooks write JSONL traces to
+  `~/.claude/.qualia-traces/YYYY-MM-DD.jsonl`. New `traces` CLI command
+  shows recent hook activity.
+- **Build recovery tags** — `/qualia-build` creates `pre-build-phase-{N}`
+  git tag before execution. `--force` flag on `state.js transition` enables
+  state recovery after failed builds.
+- **Knowledge base dedup** — `/qualia-learn` checks for existing entries
+  before appending. Entries now include UUID and ISO timestamp.
+- New tests for deploy gate, state machine, and guard hooks.
+  Total: 152 tests passing (50 hooks + 40 state + 48 bin + 14 statusline).
+
+### Fixed
+- **block-env-edit + branch-guard hooks not wired** — both hooks were
+  copied during install but never registered in `settings.json`. Employees
+  could push to main and edit `.env` files unchecked. Now registered in
+  `PreToolUse` hooks.
+- **Auto-update background script broken** — detached child script used
+  `return` at top level in `node -e`, which is a SyntaxError. The entire
+  update check silently failed every time. Replaced with `process.exit(0)`.
+- **branch-guard exit code** — used `exit(1)` (hook error) instead of
+  `exit(2)` (clean block). Now consistent with block-env-edit and
+  migration-guard.
+- Install summary hardcoded "Hooks: 6" despite installing 8. Fixed.
+- Duplicate `statusline.js` copy in installer removed.
+
+### Changed
+- `agents/verifier.md` — complete rewrite of the Scoring section into a
+  structured 4-criterion rubric with calibration examples and contract
+  verification workflow.
+- `agents/planner.md` — new Verification Contracts section with contract
+  format, types, and rules.
+- `templates/plan.md` — includes Verification Contract section.
+- `bin/state.js` — `getGapCycleLimit()`, `cmdValidatePlan()`, `--force`
+  flag, `gap_cycle_limit` in check output, plan content validation in
+  preconditions.
+- `bin/install.js` — `CLAUDE_DIR`/`FRAMEWORK_DIR` moved above `loadTeam()`;
+  team dict externalized via `loadTeam()`; ERP config in `.qualia-config.json`.
+- `bin/cli.js` — `team`, `traces` commands; uninstall cleans team file and
+  traces dir; updated help text.
+- `bin/qualia-ui.js` — gap cycle display uses dynamic limit from state.
+- `hooks/pre-deploy-gate.js` — 4 new server-side file exemptions.
+- `skills/qualia-verify/SKILL.md` — spawn prompt references contracts.
+- `skills/qualia-report/SKILL.md` — config-driven ERP upload.
+- `skills/qualia-build/SKILL.md` — recovery point step before execution.
+- `skills/qualia-learn/SKILL.md` — dedup check, UUID+timestamp format.
+
 ## [2.10.0] — 2026-04-11
 
 Modern icon system, statusline context indicators.
@@ -24,9 +96,9 @@ Modern icon system, statusline context indicators.
 - Updated utility glyphs: spawn (`⬡`), wave (`»`), next (`⟶`), banner separator (`▸`).
 - Spinner tips and hook status messages now use `⬢` prefix.
 
-## [Unreleased]
+## [2.9.0] — 2026-04-11
 
-v2.9.0 — housekeeping, test coverage, and release hygiene. In progress.
+Housekeeping, test coverage, and release hygiene.
 
 ### Added
 - GitHub Actions CI workflow — runs the full test suite on every push and PR.
@@ -269,7 +341,10 @@ and install codes.
 - Core skills, agents, hooks, rules, and templates.
 - `bin/install.js` and `bin/cli.js` installer / CLI.
 
-[Unreleased]: https://github.com/Qualiasolutions/qualia-framework-v2/compare/v2.8.1...HEAD
+[Unreleased]: https://github.com/Qualiasolutions/qualia-framework-v2/compare/v3.0.0...HEAD
+[3.0.0]: https://github.com/Qualiasolutions/qualia-framework-v2/compare/v2.10.0...v3.0.0
+[2.10.0]: https://github.com/Qualiasolutions/qualia-framework-v2/compare/v2.9.0...v2.10.0
+[2.9.0]: https://github.com/Qualiasolutions/qualia-framework-v2/compare/v2.8.1...v2.9.0
 [2.8.1]: https://github.com/Qualiasolutions/qualia-framework-v2/compare/v2.8.0...v2.8.1
 [2.8.0]: https://github.com/Qualiasolutions/qualia-framework-v2/compare/v2.7.0...v2.8.0
 [2.7.0]: https://github.com/Qualiasolutions/qualia-framework-v2/compare/v2.6.1...v2.7.0

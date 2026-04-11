@@ -494,7 +494,21 @@ else
   fail_case "settings.json contents"
 fi
 
-# 33. Lowercase code works (resolveTeamCode normalizes)
+# 33. settings.json contains all 8 hooks wired correctly
+if grep -q 'block-env-edit.js' "$TMP/.claude/settings.json" \
+   && grep -q 'branch-guard.js' "$TMP/.claude/settings.json" \
+   && grep -q 'migration-guard.js' "$TMP/.claude/settings.json" \
+   && grep -q 'pre-push.js' "$TMP/.claude/settings.json" \
+   && grep -q 'pre-deploy-gate.js' "$TMP/.claude/settings.json" \
+   && grep -q 'auto-update.js' "$TMP/.claude/settings.json" \
+   && grep -q 'session-start.js' "$TMP/.claude/settings.json" \
+   && grep -q 'pre-compact.js' "$TMP/.claude/settings.json"; then
+  pass "settings.json has all 8 hooks wired"
+else
+  fail_case "settings.json missing hooks"
+fi
+
+# 34. Lowercase code works (resolveTeamCode normalizes)
 TMP=$(mktmp)
 echo "qs-fawzi-01" | HOME="$TMP" $NODE "$INSTALL_JS" > "$TMP/out.log" 2>&1
 EXIT=$?

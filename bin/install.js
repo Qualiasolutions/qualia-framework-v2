@@ -13,8 +13,11 @@ const YELLOW = "\x1b[38;2;234;179;8m";
 const RED = "\x1b[38;2;239;68;68m";
 const RESET = "\x1b[0m";
 
+const CLAUDE_DIR = path.join(require("os").homedir(), ".claude");
+const FRAMEWORK_DIR = path.resolve(__dirname, "..");
+
 // ─── Team codes ──────────────────────────────────────────
-const TEAM = {
+const DEFAULT_TEAM = {
   "QS-FAWZI-01": {
     name: "Fawzi Goussous",
     role: "OWNER",
@@ -42,8 +45,21 @@ const TEAM = {
   },
 };
 
-const CLAUDE_DIR = path.join(require("os").homedir(), ".claude");
-const FRAMEWORK_DIR = path.resolve(__dirname, "..");
+// Load team from external file, fall back to embedded defaults.
+function loadTeam() {
+  const teamFile = path.join(CLAUDE_DIR, ".qualia-team.json");
+  try {
+    if (fs.existsSync(teamFile)) {
+      const external = JSON.parse(fs.readFileSync(teamFile, "utf8"));
+      if (external && typeof external === "object" && Object.keys(external).length > 0) {
+        return external;
+      }
+    }
+  } catch {}
+  return DEFAULT_TEAM;
+}
+
+const TEAM = loadTeam();
 
 let installed = 0;
 let errors = 0;
@@ -183,16 +199,6 @@ async function main() {
     } catch (e) {
       warn(`${file} — ${e.message}`);
     }
-  }
-
-  // ─── Status line ───────────────────────────────────────
-  log(`${WHITE}Status line${RESET}`);
-  try {
-    const slDest = path.join(CLAUDE_DIR, "bin", "statusline.js");
-    copy(path.join(FRAMEWORK_DIR, "bin", "statusline.js"), slDest);
-    ok("statusline.js");
-  } catch (e) {
-    warn(`statusline.js — ${e.message}`);
   }
 
   // ─── Templates ─────────────────────────────────────────
@@ -363,6 +369,11 @@ Client-specific preferences, design choices, and requirements. Loaded by \`/qual
     role: member.role,
     version: require("../package.json").version,
     installed_at: new Date().toISOString().split("T")[0],
+    erp: {
+      enabled: true,
+      url: "https://portal.qualiasolutions.net",
+      api_key_file: ".erp-api-key",
+    },
   };
   fs.writeFileSync(configFile, JSON.stringify(config, null, 2) + "\n");
 
@@ -469,7 +480,7 @@ Client-specific preferences, design choices, and requirements. Loaded by \`/qual
             type: "command",
             if: "Bash(git push*)",
             command: nodeCmd("branch-guard.js"),
-            timeout: 10,
+            timeout: 5,
             statusMessage: "⬢ Checking branch permissions...",
           },
           {
@@ -493,7 +504,6 @@ Client-specific preferences, design choices, and requirements. Loaded by \`/qual
         hooks: [
           {
             type: "command",
-            if: "Edit(*.env*)|Write(*.env*)",
             command: nodeCmd("block-env-edit.js"),
             timeout: 5,
             statusMessage: "⬢ Checking file permissions...",
@@ -523,20 +533,15 @@ Client-specific preferences, design choices, and requirements. Loaded by \`/qual
     ],
   };
 
-  // Permissions
+  // Permissions — no restrictions on env files or branches.
+  // Everyone can read/write .env, push to main.
   if (!settings.permissions) settings.permissions = {};
   if (!settings.permissions.allow) settings.permissions.allow = [];
-  if (!settings.permissions.deny) {
-    settings.permissions.deny = [
-      "Read(./.env)",
-      "Read(./.env.*)",
-      "Read(./secrets/**)",
-    ];
-  }
+  if (!settings.permissions.deny) settings.permissions.deny = [];
 
   fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
 
-  ok("Hooks: session-start, auto-update, branch-guard, pre-push, env-block, migration-guard, deploy-gate, pre-compact");
+  ok("Hooks: session-start, auto-update, branch-guard, pre-push, block-env-edit, migration-guard, deploy-gate, pre-compact");
   ok("Status line + spinner configured");
   ok("Environment variables + permissions");
 
@@ -548,7 +553,7 @@ Client-specific preferences, design choices, and requirements. Loaded by \`/qual
   console.log(`  Skills:       ${WHITE}${skills.length}${RESET}`);
   const agentCount = fs.readdirSync(agentsDir).filter(f => f.endsWith('.md')).length;
   console.log(`  Agents:       ${WHITE}${agentCount}${RESET} ${DIM}(planner, builder, verifier, qa-browser)${RESET}`);
-  console.log(`  Hooks:        ${WHITE}8${RESET} ${DIM}(session-start, auto-update, branch-guard, pre-push, env-block, migration-guard, deploy-gate, pre-compact)${RESET}`);
+  console.log(`  Hooks:        ${WHITE}8${RESET} ${DIM}(session-start, auto-update, branch-guard, pre-push, block-env-edit, migration-guard, deploy-gate, pre-compact)${RESET}`);
   console.log(`  Rules:        ${WHITE}${fs.readdirSync(rulesDir).length}${RESET} ${DIM}(security, frontend, design-reference, deployment)${RESET}`);
   console.log(`  Scripts:      ${WHITE}3${RESET} ${DIM}(state.js, qualia-ui.js, statusline.js)${RESET}`);
   console.log(`  Knowledge:    ${WHITE}3${RESET} ${DIM}(patterns, fixes, client prefs)${RESET}`);

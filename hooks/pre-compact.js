@@ -7,6 +7,8 @@ const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
 
+const _traceStart = Date.now();
+
 const STATE_FILE = path.join(".planning", "STATE.md");
 
 try {
@@ -29,4 +31,22 @@ try {
   // Silent — never block compaction
 }
 
+function _trace(hookName, result, extra) {
+  try {
+    const os = require("os");
+    const traceDir = path.join(os.homedir(), ".claude", ".qualia-traces");
+    if (!fs.existsSync(traceDir)) fs.mkdirSync(traceDir, { recursive: true });
+    const entry = {
+      hook: hookName,
+      result,
+      timestamp: new Date().toISOString(),
+      duration_ms: Date.now() - _traceStart,
+      ...extra,
+    };
+    const file = path.join(traceDir, `${new Date().toISOString().split("T")[0]}.jsonl`);
+    fs.appendFileSync(file, JSON.stringify(entry) + "\n");
+  } catch {}
+}
+
+_trace("pre-compact", "allow");
 process.exit(0);

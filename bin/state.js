@@ -186,6 +186,25 @@ const VALID_FROM = {
   done: ["handed_off"],
 };
 
+// ─── Configurable Gap Cycle Limit ────────────────────────
+function getGapCycleLimit() {
+  // Priority: tracking.json.gap_cycle_limit > PROJECT.md > default (2)
+  try {
+    const t = readTracking();
+    if (t && typeof t.gap_cycle_limit === "number" && t.gap_cycle_limit > 0) {
+      return t.gap_cycle_limit;
+    }
+  } catch {}
+
+  try {
+    const projectMd = fs.readFileSync(path.join(PLANNING, "PROJECT.md"), "utf8");
+    const match = projectMd.match(/^gap_cycle_limit:\s*(\d+)/m);
+    if (match) return parseInt(match[1]);
+  } catch {}
+
+  return 2; // default
+}
+
 function checkPreconditions(current, target, opts) {
   const phase = parseInt(opts.phase) || current.phase;
 
@@ -207,6 +226,14 @@ function checkPreconditions(current, target, opts) {
     const planFile = path.join(PLANNING, `phase-${phase}-plan.md`);
     if (!fs.existsSync(planFile))
       return fail("MISSING_FILE", `Plan file not found: ${planFile}`);
+    // Validate plan content (not just existence)
+    const planContent = fs.readFileSync(planFile, "utf8");
+    const taskHeaders = planContent.match(/^## Task \d+/gm);
+    if (!taskHeaders || taskHeaders.length === 0)
+      return fail("INVALID_PLAN", "Plan file has no task headers (expected '## Task N')");
+    const doneWhenCount = (planContent.match(/\*\*Done when:\*\*/g) || []).length;
+    if (doneWhenCount < taskHeaders.length)
+      return fail("INVALID_PLAN", `${taskHeaders.length} tasks but only ${doneWhenCount} 'Done when:' entries`);
   }
 
   if (target === "verified") {
@@ -228,14 +255,15 @@ function checkPreconditions(current, target, opts) {
       return fail("MISSING_FILE", `Handoff file not found: ${hFile}`);
   }
 
-  // Gap-closure circuit breaker
+  // Gap-closure circuit breaker (configurable limit)
   if (target === "planned" && current.status === "verified") {
     const t = readTracking() || {};
     const cycles = (t.gap_cycles || {})[String(phase)] || 0;
-    if (cycles >= 2) {
+    const limit = getGapCycleLimit();
+    if (cycles >= limit) {
       return fail(
         "GAP_CYCLE_LIMIT",
-        `Phase ${phase} has failed verification ${cycles} times. Escalate to Fawzi or re-plan from scratch.`
+        `Phase ${phase} has failed verification ${cycles} times (limit: ${limit}). Escalate to Fawzi or re-plan from scratch.`
       );
     }
   }
@@ -294,6 +322,7 @@ function cmdCheck(opts) {
     assigned_to: s.assigned_to,
     verification: t.verification || "pending",
     gap_cycles: (t.gap_cycles || {})[String(s.phase)] || 0,
+    gap_cycle_limit: getGapCycleLimit(),
     tasks_done: t.tasks_done || 0,
     tasks_total: t.tasks_total || 0,
     deployed_url: t.deployed_url || "",
@@ -331,7 +360,6 @@ function cmdTransition(opts) {
 
   // Special: note/activity (no status change)
   if (target === "note" || target === "activity") {
-    const now = new Date().toISOString().split("T")[0];
     if (opts.notes) t.notes = opts.notes;
     t.last_updated = new Date().toISOString();
     writeTracking(t);
@@ -353,7 +381,16 @@ function cmdTransition(opts) {
     target,
     { ...opts, phase }
   );
-  if (!check.ok) return output(check);
+  if (!check.ok) {
+    // Force only bypasses status-ordering errors (PRECONDITION_FAILED, GAP_CYCLE_LIMIT).
+    // Never bypass MISSING_FILE, MISSING_ARG, INVALID_PLAN — those cause broken state.
+    const forceableErrors = ["PRECONDITION_FAILED", "GAP_CYCLE_LIMIT"];
+    if (opts.force && forceableErrors.includes(check.error)) {
+      console.error(`WARNING: Forcing transition despite: ${check.message}`);
+    } else {
+      return output(check);
+    }
+  }
 
   const prevStatus = s.status;
 
@@ -597,6 +634,66 @@ function cmdFix(opts) {
   });
 }
 
+function cmdValidatePlan(opts) {
+  const phase = parseInt(opts.phase) || 1;
+  const planFile = path.join(PLANNING, `phase-${phase}-plan.md`);
+
+  if (!fs.existsSync(planFile)) {
+    return output(fail("MISSING_FILE", `Plan file not found: ${planFile}`));
+  }
+
+  const content = fs.readFileSync(planFile, "utf8");
+  const errors = [];
+
+  // Check frontmatter exists
+  if (!/^---\n/.test(content)) {
+    errors.push("Missing frontmatter (---) at start of file");
+  }
+
+  // Check task count > 0
+  const taskHeaders = content.match(/^## Task \d+/gm);
+  if (!taskHeaders || taskHeaders.length === 0) {
+    errors.push("No task headers found (expected '## Task N — title')");
+  }
+
+  // Check "Done when" exists for each task
+  const taskCount = taskHeaders ? taskHeaders.length : 0;
+  const doneWhenCount = (content.match(/\*\*Done when:\*\*/g) || []).length;
+  if (doneWhenCount < taskCount) {
+    errors.push(
+      `${taskCount} tasks but only ${doneWhenCount} 'Done when:' entries`
+    );
+  }
+
+  // Check Success Criteria section exists
+  if (!/## Success Criteria/m.test(content)) {
+    errors.push("Missing '## Success Criteria' section");
+  }
+
+  // Check goal in frontmatter
+  if (!/^goal:/m.test(content)) {
+    errors.push("Missing 'goal:' in frontmatter");
+  }
+
+  if (errors.length > 0) {
+    return output({
+      ok: false,
+      error: "PLAN_VALIDATION_FAILED",
+      phase,
+      errors,
+      message: `Plan file has ${errors.length} issue(s)`,
+    });
+  }
+
+  output({
+    ok: true,
+    action: "validate-plan",
+    phase,
+    task_count: taskCount,
+    done_when_count: doneWhenCount,
+  });
+}
+
 // ─── Output ──────────────────────────────────────────────
 function output(obj) {
   console.log(JSON.stringify(obj, null, 2));
@@ -620,11 +717,14 @@ switch (cmd) {
   case "fix":
     cmdFix(opts);
     break;
+  case "validate-plan":
+    cmdValidatePlan(opts);
+    break;
   default:
     output(
       fail(
         "UNKNOWN_COMMAND",
-        `Usage: state.js <check|transition|init|fix> [--options]`
+        `Usage: state.js <check|transition|init|fix|validate-plan> [--options]`
       )
     );
 }

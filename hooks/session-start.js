@@ -12,6 +12,8 @@ const path = require("path");
 const os = require("os");
 const { spawnSync } = require("child_process");
 
+const _traceStart = Date.now();
+
 const HOME = os.homedir();
 const UI = path.join(HOME, ".claude", "bin", "qualia-ui.js");
 const STATE_FILE = path.join(".planning", "STATE.md");
@@ -81,4 +83,21 @@ try {
   // Deliberately silent — hook must never fail
 }
 
+function _trace(hookName, result, extra) {
+  try {
+    const traceDir = path.join(os.homedir(), ".claude", ".qualia-traces");
+    if (!fs.existsSync(traceDir)) fs.mkdirSync(traceDir, { recursive: true });
+    const entry = {
+      hook: hookName,
+      result,
+      timestamp: new Date().toISOString(),
+      duration_ms: Date.now() - _traceStart,
+      ...extra,
+    };
+    const file = path.join(traceDir, `${new Date().toISOString().split("T")[0]}.jsonl`);
+    fs.appendFileSync(file, JSON.stringify(entry) + "\n");
+  } catch {}
+}
+
+_trace("session-start", "allow");
 process.exit(0);

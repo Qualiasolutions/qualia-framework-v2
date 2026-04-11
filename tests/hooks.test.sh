@@ -107,11 +107,11 @@ TMP=$(setup_guard_repo main OWNER)
 assert_exit "OWNER on main → allowed" 0 $?
 rm -rf "$TMP"
 
-# EMPLOYEE on main → blocked (exit 1)
+# EMPLOYEE on main → blocked (exit 2)
 TMP=$(setup_guard_repo main EMPLOYEE)
 OUT=$(cd "$TMP/proj" && HOME="$TMP" $NODE "$HOOKS_DIR/branch-guard.js" 2>&1)
 RC=$?
-if [ "$RC" -eq 1 ] && echo "$OUT" | grep -q "BLOCKED" && echo "$OUT" | grep -q "main"; then
+if [ "$RC" -eq 2 ] && echo "$OUT" | grep -q "BLOCKED" && echo "$OUT" | grep -q "main"; then
   echo "  ✓ EMPLOYEE on main → blocked (BLOCKED in stdout)"
   PASS=$((PASS + 1))
 else
@@ -123,7 +123,7 @@ rm -rf "$TMP"
 # EMPLOYEE on master → blocked
 TMP=$(setup_guard_repo master EMPLOYEE)
 (cd "$TMP/proj" && HOME="$TMP" $NODE "$HOOKS_DIR/branch-guard.js" >/dev/null 2>&1)
-assert_exit "EMPLOYEE on master → blocked" 1 $?
+assert_exit "EMPLOYEE on master → blocked" 2 $?
 rm -rf "$TMP"
 
 # EMPLOYEE on feature branch → allowed
@@ -138,13 +138,13 @@ TMP=$(setup_guard_repo feature/xyz OWNER)
 assert_exit "OWNER on feature/xyz → allowed" 0 $?
 rm -rf "$TMP"
 
-# Missing config → fails closed (block, exit 1)
+# Missing config → fails closed (block, exit 2)
 TMP=$(mktemp -d)
 mkdir -p "$TMP/proj"
 (cd "$TMP/proj" && git init -q && git checkout -b feature/x -q 2>/dev/null)
 # NO .claude/.qualia-config.json
 (cd "$TMP/proj" && HOME="$TMP" $NODE "$HOOKS_DIR/branch-guard.js" >/dev/null 2>&1)
-assert_exit "missing config → blocked (fails closed)" 1 $?
+assert_exit "missing config → blocked (fails closed)" 2 $?
 rm -rf "$TMP"
 
 # Malformed config JSON → fails closed
@@ -153,7 +153,7 @@ mkdir -p "$TMP/proj" "$TMP/.claude"
 (cd "$TMP/proj" && git init -q && git checkout -b feature/x -q 2>/dev/null)
 echo 'not json{' > "$TMP/.claude/.qualia-config.json"
 (cd "$TMP/proj" && HOME="$TMP" $NODE "$HOOKS_DIR/branch-guard.js" >/dev/null 2>&1)
-assert_exit "malformed config JSON → blocked" 1 $?
+assert_exit "malformed config JSON → blocked" 2 $?
 rm -rf "$TMP"
 
 # Empty role field → fails closed
@@ -162,7 +162,7 @@ mkdir -p "$TMP/proj" "$TMP/.claude"
 (cd "$TMP/proj" && git init -q && git checkout -b feature/x -q 2>/dev/null)
 echo '{"role":""}' > "$TMP/.claude/.qualia-config.json"
 (cd "$TMP/proj" && HOME="$TMP" $NODE "$HOOKS_DIR/branch-guard.js" >/dev/null 2>&1)
-assert_exit "empty role field → blocked" 1 $?
+assert_exit "empty role field → blocked" 2 $?
 rm -rf "$TMP"
 
 # --- pre-push.js ---
@@ -284,6 +284,52 @@ else
   echo "  ✗ clean project → all gates pass (exit=$RC)"
   FAIL=$((FAIL + 1))
 fi
+rm -rf "$TMP"
+
+# --- pre-deploy-gate: Server Component / route handler exemptions ---
+
+# route.ts with service_role → exempt (always server-side)
+TMP=$(mktemp -d)
+mkdir -p "$TMP/app/api/auth"
+echo 'const key = process.env.SUPABASE_SERVICE_ROLE_KEY; export async function POST() {}' > "$TMP/app/api/auth/route.ts"
+OUT=$( (cd "$TMP" && $NODE "$HOOKS_DIR/pre-deploy-gate.js") 2>&1 )
+RC=$?
+assert_exit "route.ts with service_role → exempt (exit 0)" 0 $RC
+rm -rf "$TMP"
+
+# middleware.ts with service_role → exempt (always server-side)
+TMP=$(mktemp -d)
+echo 'import { service_role } from "./config"; export function middleware() {}' > "$TMP/middleware.ts"
+OUT=$( (cd "$TMP" && $NODE "$HOOKS_DIR/pre-deploy-gate.js") 2>&1 )
+RC=$?
+assert_exit "middleware.ts with service_role → exempt (exit 0)" 0 $RC
+rm -rf "$TMP"
+
+# File in app/api/ with service_role → exempt
+TMP=$(mktemp -d)
+mkdir -p "$TMP/app/api/webhook"
+echo 'const sr = "service_role"; export async function GET() { return new Response(sr); }' > "$TMP/app/api/webhook/route.js"
+OUT=$( (cd "$TMP" && $NODE "$HOOKS_DIR/pre-deploy-gate.js") 2>&1 )
+RC=$?
+assert_exit "app/api/ file with service_role → exempt (exit 0)" 0 $RC
+rm -rf "$TMP"
+
+# File with "use server" directive + service_role → exempt
+TMP=$(mktemp -d)
+mkdir -p "$TMP/app/admin"
+printf '"use server"\nconst key = process.env.SUPABASE_SERVICE_ROLE_KEY;\nexport async function deleteUser() {}\n' > "$TMP/app/admin/actions.ts"
+OUT=$( (cd "$TMP" && $NODE "$HOOKS_DIR/pre-deploy-gate.js") 2>&1 )
+RC=$?
+assert_exit "\"use server\" file with service_role → exempt (exit 0)" 0 $RC
+rm -rf "$TMP"
+
+# Regular app/page.tsx WITHOUT directive + service_role → still blocks
+TMP=$(mktemp -d)
+mkdir -p "$TMP/app/admin"
+echo 'const key = "service_role"; export default function Page() { return <div>{key}</div>; }' > "$TMP/app/admin/page.tsx"
+OUT=$( (cd "$TMP" && $NODE "$HOOKS_DIR/pre-deploy-gate.js") 2>&1 )
+RC=$?
+assert_exit "regular page.tsx with service_role → blocked (exit 1)" 1 $RC
 rm -rf "$TMP"
 
 # --- session-start.js — must exit 0 always ---

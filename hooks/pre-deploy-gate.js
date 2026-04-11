@@ -9,6 +9,25 @@ const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
 
+const _traceStart = Date.now();
+
+function _trace(hookName, result, extra) {
+  try {
+    const os = require("os");
+    const traceDir = path.join(os.homedir(), ".claude", ".qualia-traces");
+    if (!fs.existsSync(traceDir)) fs.mkdirSync(traceDir, { recursive: true });
+    const entry = {
+      hook: hookName,
+      result,
+      timestamp: new Date().toISOString(),
+      duration_ms: Date.now() - _traceStart,
+      ...extra,
+    };
+    const file = path.join(traceDir, `${new Date().toISOString().split("T")[0]}.jsonl`);
+    fs.appendFileSync(file, JSON.stringify(entry) + "\n");
+  } catch {}
+}
+
 function runGate(label, cmd, args, { required = true } = {}) {
   const r = spawnSync(cmd, args, {
     stdio: "ignore",
@@ -21,6 +40,7 @@ function runGate(label, cmd, args, { required = true } = {}) {
   }
   if (required) {
     console.log(`BLOCKED: ${label} errors. Fix before deploying.`);
+    _trace("pre-deploy-gate", "block", { gate: label });
     process.exit(1);
   }
   return false;
@@ -60,10 +80,27 @@ function scanServiceRoleLeaks() {
   const leaks = [];
   for (const root of roots) {
     for (const file of walk(root)) {
+      // --- Path-based skips (no I/O needed) ---
+
       // Skip server-only files (convention: *.server.ts, server/ dirs)
       if (/\.server\.|[\\/]server[\\/]/.test(file)) continue;
+
+      // Skip App Router route handlers (always server-side)
+      if (/[\\/]route\.(ts|tsx|js|jsx|mjs)$/.test(file)) continue;
+
+      // Skip middleware (always server-side)
+      if (/[\\/]middleware\.(ts|tsx|js|jsx|mjs)$/.test(file)) continue;
+
+      // Skip files in app/api/ directory (always server-side)
+      if (/[\\/]app[\\/]api[\\/]/.test(file)) continue;
+
+      // --- Content-based checks (requires reading file) ---
       try {
         const content = fs.readFileSync(file, "utf8");
+
+        // Skip files with "use server" directive (Server Actions / Server Components)
+        if (/^["']use server["']/m.test(content)) continue;
+
         if (/service_role/.test(content)) {
           leaks.push(file);
         }
@@ -102,9 +139,11 @@ if (leaks.length > 0) {
   for (const f of leaks.slice(0, 10)) {
     console.log(`  ✗ ${f}`);
   }
+  _trace("pre-deploy-gate", "block", { gate: "security", leaks: leaks.slice(0, 10) });
   process.exit(1);
 }
 console.log("  ✓ Security");
 console.log("⬢ All gates passed.");
 
+_trace("pre-deploy-gate", "allow");
 process.exit(0);

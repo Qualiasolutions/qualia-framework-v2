@@ -6,6 +6,8 @@
 
 const fs = require("fs");
 
+const _traceStart = Date.now();
+
 function readInput() {
   try {
     const raw = fs.readFileSync(0, "utf8");
@@ -20,8 +22,27 @@ const ti = input.tool_input || {};
 const file = String(ti.file_path || "").replace(/\\/g, "/");
 const content = String(ti.content || ti.new_string || "");
 
+function _trace(hookName, result, extra) {
+  try {
+    const os = require("os");
+    const path = require("path");
+    const traceDir = path.join(os.homedir(), ".claude", ".qualia-traces");
+    if (!fs.existsSync(traceDir)) fs.mkdirSync(traceDir, { recursive: true });
+    const entry = {
+      hook: hookName,
+      result,
+      timestamp: new Date().toISOString(),
+      duration_ms: Date.now() - _traceStart,
+      ...extra,
+    };
+    const filePath = path.join(traceDir, `${new Date().toISOString().split("T")[0]}.jsonl`);
+    fs.appendFileSync(filePath, JSON.stringify(entry) + "\n");
+  } catch {}
+}
+
 // Only inspect migration/SQL files
 if (!/migration|migrate|\.sql$/i.test(file)) {
+  _trace("migration-guard", "allow", { reason: "non-migration file" });
   process.exit(0);
 }
 
@@ -54,7 +75,9 @@ if (errors.length > 0) {
   }
   console.log("");
   console.log("Fix these before proceeding. If intentional, ask Fawzi to approve.");
+  _trace("migration-guard", "block", { errors });
   process.exit(2);
 }
 
+_trace("migration-guard", "allow");
 process.exit(0);

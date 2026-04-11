@@ -6,6 +6,8 @@
 
 const fs = require("fs");
 
+const _traceStart = Date.now();
+
 function readInput() {
   try {
     const raw = fs.readFileSync(0, "utf8");
@@ -22,9 +24,29 @@ const file = (input.tool_input && (input.tool_input.file_path || input.tool_inpu
 // Normalize separators so Windows paths (C:\project\.env.local) also match.
 const normalized = String(file).replace(/\\/g, "/");
 
+function _trace(hookName, result, extra) {
+  try {
+    const os = require("os");
+    const path = require("path");
+    const traceDir = path.join(os.homedir(), ".claude", ".qualia-traces");
+    if (!fs.existsSync(traceDir)) fs.mkdirSync(traceDir, { recursive: true });
+    const entry = {
+      hook: hookName,
+      result,
+      timestamp: new Date().toISOString(),
+      duration_ms: Date.now() - _traceStart,
+      ...extra,
+    };
+    const file = path.join(traceDir, `${new Date().toISOString().split("T")[0]}.jsonl`);
+    fs.appendFileSync(file, JSON.stringify(entry) + "\n");
+  } catch {}
+}
+
 if (/\.env(\.|$)/.test(normalized)) {
   console.log("BLOCKED: Cannot edit environment files. Ask Fawzi to update secrets.");
+  _trace("block-env-edit", "block", { file: normalized });
   process.exit(2);
 }
 
+_trace("block-env-edit", "allow");
 process.exit(0);

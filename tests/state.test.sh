@@ -45,6 +45,34 @@ fail_case() {
   FAIL=$((FAIL + 1))
 }
 
+# Write a minimal valid plan file (passes content validation).
+# Usage: make_valid_plan "$TMP" 1
+make_valid_plan() {
+  local dir="$1"
+  local phase="${2:-1}"
+  cat > "$dir/.planning/phase-${phase}-plan.md" <<'PLAN'
+---
+phase: 1
+goal: "Test goal"
+tasks: 1
+waves: 1
+---
+
+# Phase 1: Test
+
+Goal: Test goal
+
+## Task 1 — Test task
+**Wave:** 1
+**Files:** src/test.ts
+**Action:** Create test file
+**Done when:** File exists
+
+## Success Criteria
+- [ ] Test passes
+PLAN
+}
+
 echo "=== state.js Behavioral Tests ==="
 echo ""
 
@@ -126,7 +154,7 @@ echo "happy path transitions:"
 
 # 4. setup → planned (with plan file)
 TMP=$(make_project)
-touch "$TMP/.planning/phase-1-plan.md"
+make_valid_plan "$TMP" 1
 OUT=$(cd "$TMP" && $NODE "$STATE_JS" transition --to planned 2>&1)
 EXIT=$?
 if [ "$EXIT" -eq 0 ] \
@@ -166,7 +194,7 @@ fi
 
 # 7. built → verified(fail) stays on phase 1, records verification=fail
 TMP=$(make_project)
-touch "$TMP/.planning/phase-1-plan.md"
+make_valid_plan "$TMP" 1
 (cd "$TMP" && $NODE "$STATE_JS" transition --to planned >/dev/null 2>&1)
 (cd "$TMP" && $NODE "$STATE_JS" transition --to built --tasks-done 3 --tasks-total 5 >/dev/null 2>&1)
 touch "$TMP/.planning/phase-1-verification.md"
@@ -201,7 +229,7 @@ fi
 
 # 9. planned → verified fails (requires status=built)
 TMP=$(make_project)
-touch "$TMP/.planning/phase-1-plan.md"
+make_valid_plan "$TMP" 1
 (cd "$TMP" && $NODE "$STATE_JS" transition --to planned >/dev/null 2>&1)
 touch "$TMP/.planning/phase-1-verification.md"
 OUT=$(cd "$TMP" && $NODE "$STATE_JS" transition --to verified --verification pass 2>&1)
@@ -229,7 +257,7 @@ fi
 
 # 11. built → verified with missing verification file → MISSING_FILE
 TMP=$(make_project)
-touch "$TMP/.planning/phase-1-plan.md"
+make_valid_plan "$TMP" 1
 (cd "$TMP" && $NODE "$STATE_JS" transition --to planned >/dev/null 2>&1)
 (cd "$TMP" && $NODE "$STATE_JS" transition --to built --tasks-done 1 --tasks-total 1 >/dev/null 2>&1)
 # NO verification file
@@ -245,7 +273,7 @@ fi
 
 # 12. built → verified without --verification → MISSING_ARG
 TMP=$(make_project)
-touch "$TMP/.planning/phase-1-plan.md"
+make_valid_plan "$TMP" 1
 (cd "$TMP" && $NODE "$STATE_JS" transition --to planned >/dev/null 2>&1)
 (cd "$TMP" && $NODE "$STATE_JS" transition --to built --tasks-done 1 --tasks-total 1 >/dev/null 2>&1)
 touch "$TMP/.planning/phase-1-verification.md"
@@ -262,13 +290,13 @@ fi
 # 13. → shipped without --deployed-url → MISSING_ARG
 # Must go through polished first, so fabricate state by transitioning through the full path.
 TMP=$(make_project)
-touch "$TMP/.planning/phase-1-plan.md"
+make_valid_plan "$TMP" 1
 (cd "$TMP" && $NODE "$STATE_JS" transition --to planned >/dev/null 2>&1)
 (cd "$TMP" && $NODE "$STATE_JS" transition --to built --tasks-done 1 --tasks-total 1 >/dev/null 2>&1)
 touch "$TMP/.planning/phase-1-verification.md"
 (cd "$TMP" && $NODE "$STATE_JS" transition --to verified --verification pass >/dev/null 2>&1)
 # Now on phase 2, status=setup. Run phase 2 to completion.
-touch "$TMP/.planning/phase-2-plan.md"
+make_valid_plan "$TMP" 2
 (cd "$TMP" && $NODE "$STATE_JS" transition --to planned >/dev/null 2>&1)
 (cd "$TMP" && $NODE "$STATE_JS" transition --to built --tasks-done 1 --tasks-total 1 >/dev/null 2>&1)
 touch "$TMP/.planning/phase-2-verification.md"
@@ -303,7 +331,7 @@ echo "gap cycle circuit breaker:"
 
 # 15. First gap closure: verified(fail) → planned, gap_cycles[1]=1
 TMP=$(make_project)
-touch "$TMP/.planning/phase-1-plan.md"
+make_valid_plan "$TMP" 1
 touch "$TMP/.planning/phase-1-verification.md"
 (cd "$TMP" && $NODE "$STATE_JS" transition --to planned >/dev/null 2>&1)
 (cd "$TMP" && $NODE "$STATE_JS" transition --to built --tasks-done 1 --tasks-total 1 >/dev/null 2>&1)
@@ -346,7 +374,7 @@ fi
 # 18. verified(pass) resets gap_cycles[1] to 0
 # Set up a fresh project, do ONE failed cycle, then pass on the next attempt.
 TMP=$(make_project)
-touch "$TMP/.planning/phase-1-plan.md"
+make_valid_plan "$TMP" 1
 touch "$TMP/.planning/phase-1-verification.md"
 (cd "$TMP" && $NODE "$STATE_JS" transition --to planned >/dev/null 2>&1)
 (cd "$TMP" && $NODE "$STATE_JS" transition --to built --tasks-done 1 --tasks-total 1 >/dev/null 2>&1)
@@ -465,7 +493,7 @@ fi
 
 # 26. Transition refuses on severity=error (missing Phase: header)
 TMP=$(make_project)
-touch "$TMP/.planning/phase-1-plan.md"
+make_valid_plan "$TMP" 1
 sed -i.bak '/^Phase:/d' "$TMP/.planning/STATE.md"
 OUT=$(cd "$TMP" && $NODE "$STATE_JS" transition --to planned 2>&1)
 EXIT=$?
@@ -513,7 +541,7 @@ fi
 
 # 29. After fix, transition that was previously blocked now works
 TMP=$(make_project)
-touch "$TMP/.planning/phase-1-plan.md"
+make_valid_plan "$TMP" 1
 sed -i.bak '/^Phase:/d' "$TMP/.planning/STATE.md"
 # Blocked before fix
 (cd "$TMP" && $NODE "$STATE_JS" transition --to planned 2>&1 | grep -q STATE_SCHEMA_ERROR) || \
@@ -527,6 +555,156 @@ if [ "$EXIT" -eq 0 ] \
   pass "after fix, blocked transition succeeds"
 else
   fail_case "after fix transition" "exit=$EXIT out=$OUT"
+fi
+
+# ─── Configurable gap cycle limit ────────────────────────
+echo ""
+echo "configurable gap cycle limit:"
+
+# 30. gap_cycle_limit=5 allows 3rd gap closure (would fail at default 2)
+TMP=$(make_project)
+make_valid_plan "$TMP" 1
+touch "$TMP/.planning/phase-1-verification.md"
+# Set custom limit in tracking.json
+TRACKING=$(cat "$TMP/.planning/tracking.json")
+echo "$TRACKING" | $NODE -e "
+  const t = JSON.parse(require('fs').readFileSync(0,'utf8'));
+  t.gap_cycle_limit = 5;
+  process.stdout.write(JSON.stringify(t, null, 2));
+" > "$TMP/.planning/tracking.json"
+# Do 3 gap closure cycles
+(cd "$TMP" && $NODE "$STATE_JS" transition --to planned >/dev/null 2>&1)
+(cd "$TMP" && $NODE "$STATE_JS" transition --to built --tasks-done 1 --tasks-total 1 >/dev/null 2>&1)
+(cd "$TMP" && $NODE "$STATE_JS" transition --to verified --verification fail >/dev/null 2>&1)
+(cd "$TMP" && $NODE "$STATE_JS" transition --to planned >/dev/null 2>&1)
+(cd "$TMP" && $NODE "$STATE_JS" transition --to built --tasks-done 1 --tasks-total 1 >/dev/null 2>&1)
+(cd "$TMP" && $NODE "$STATE_JS" transition --to verified --verification fail >/dev/null 2>&1)
+# 3rd closure should succeed (limit is 5, we're at 2)
+OUT=$(cd "$TMP" && $NODE "$STATE_JS" transition --to planned 2>&1)
+EXIT=$?
+if [ "$EXIT" -eq 0 ] \
+   && echo "$OUT" | grep -q '"ok": true'; then
+  pass "gap_cycle_limit=5 allows 3rd closure (default would block)"
+else
+  fail_case "custom gap limit" "exit=$EXIT out=$OUT"
+fi
+
+# 31. cmdCheck includes gap_cycle_limit in output
+TMP=$(make_project)
+OUT=$(cd "$TMP" && $NODE "$STATE_JS" check 2>&1)
+if echo "$OUT" | grep -q '"gap_cycle_limit":'; then
+  pass "cmdCheck includes gap_cycle_limit in output"
+else
+  fail_case "gap_cycle_limit in check" "out=$OUT"
+fi
+
+# ─── Plan content validation ────────────────────────────
+echo ""
+echo "plan content validation:"
+
+# 32. validate-plan accepts well-formed plan
+TMP=$(make_project)
+make_valid_plan "$TMP" 1
+OUT=$(cd "$TMP" && $NODE "$STATE_JS" validate-plan --phase 1 2>&1)
+EXIT=$?
+if [ "$EXIT" -eq 0 ] \
+   && echo "$OUT" | grep -q '"action": "validate-plan"' \
+   && echo "$OUT" | grep -q '"task_count": 1'; then
+  pass "validate-plan accepts well-formed plan"
+else
+  fail_case "validate well-formed plan" "exit=$EXIT out=$OUT"
+fi
+
+# 33. validate-plan rejects empty plan
+TMP=$(make_project)
+echo "" > "$TMP/.planning/phase-1-plan.md"
+OUT=$(cd "$TMP" && $NODE "$STATE_JS" validate-plan --phase 1 2>&1)
+EXIT=$?
+if [ "$EXIT" -eq 1 ] \
+   && echo "$OUT" | grep -q '"error": "PLAN_VALIDATION_FAILED"'; then
+  pass "validate-plan rejects empty plan"
+else
+  fail_case "validate empty plan" "exit=$EXIT out=$OUT"
+fi
+
+# 34. validate-plan rejects plan missing Done when
+TMP=$(make_project)
+cat > "$TMP/.planning/phase-1-plan.md" <<'EOF'
+---
+phase: 1
+goal: "Test"
+tasks: 1
+waves: 1
+---
+## Task 1 — Incomplete
+**Wave:** 1
+**Files:** test.ts
+**Action:** Do something
+
+## Success Criteria
+- [ ] Works
+EOF
+OUT=$(cd "$TMP" && $NODE "$STATE_JS" validate-plan --phase 1 2>&1)
+EXIT=$?
+if [ "$EXIT" -eq 1 ] \
+   && echo "$OUT" | grep -q "PLAN_VALIDATION_FAILED" \
+   && echo "$OUT" | grep -q "Done when"; then
+  pass "validate-plan rejects plan missing 'Done when'"
+else
+  fail_case "validate missing done-when" "exit=$EXIT out=$OUT"
+fi
+
+# 35. Transition to planned with invalid plan content → INVALID_PLAN
+TMP=$(make_project)
+echo "# Empty plan with no tasks" > "$TMP/.planning/phase-1-plan.md"
+OUT=$(cd "$TMP" && $NODE "$STATE_JS" transition --to planned 2>&1)
+EXIT=$?
+if [ "$EXIT" -eq 1 ] \
+   && echo "$OUT" | grep -q '"error": "INVALID_PLAN"'; then
+  pass "transition → planned with invalid plan → INVALID_PLAN"
+else
+  fail_case "transition invalid plan" "exit=$EXIT out=$OUT"
+fi
+
+# ─── Force flag ──────────────────────────────────────────
+echo ""
+echo "force flag:"
+
+# 36. --force bypasses precondition failure
+TMP=$(make_project)
+# setup → built should fail (requires planned first)
+OUT=$(cd "$TMP" && $NODE "$STATE_JS" transition --to built --force 2>&1)
+EXIT=$?
+if [ "$EXIT" -eq 0 ] \
+   && echo "$OUT" | grep -q '"ok": true' \
+   && echo "$OUT" | grep -q '"status": "built"'; then
+  pass "--force bypasses precondition (setup → built)"
+else
+  fail_case "force flag" "exit=$EXIT out=$OUT"
+fi
+
+# 37. --force does NOT bypass MISSING_FILE (planned without plan file)
+TMP=$(make_project)
+# No plan file exists — force should NOT help
+OUT=$(cd "$TMP" && $NODE "$STATE_JS" transition --to planned --force 2>&1)
+EXIT=$?
+if [ "$EXIT" -eq 1 ] \
+   && echo "$OUT" | grep -q '"error": "MISSING_FILE"'; then
+  pass "--force does NOT bypass MISSING_FILE"
+else
+  fail_case "force vs MISSING_FILE" "exit=$EXIT out=$OUT"
+fi
+
+# 38. --force does NOT bypass INVALID_PLAN
+TMP=$(make_project)
+echo "# No tasks here" > "$TMP/.planning/phase-1-plan.md"
+OUT=$(cd "$TMP" && $NODE "$STATE_JS" transition --to planned --force 2>&1)
+EXIT=$?
+if [ "$EXIT" -eq 1 ] \
+   && echo "$OUT" | grep -q '"error": "INVALID_PLAN"'; then
+  pass "--force does NOT bypass INVALID_PLAN"
+else
+  fail_case "force vs INVALID_PLAN" "exit=$EXIT out=$OUT"
 fi
 
 # ─── Summary ─────────────────────────────────────────────

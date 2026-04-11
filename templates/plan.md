@@ -26,3 +26,17 @@ Goal: {what must be true when done}
 - [ ] {truth 1 — what the user can do}
 - [ ] {truth 2}
 - [ ] {truth 3}
+
+## Verification Contract
+
+### Contract for Task 1 — {title}
+**Check type:** {file-exists | grep-match | command-exit | behavioral}
+**Command:** `{exact command the verifier will run}`
+**Expected:** {what the output should be}
+**Fail if:** {what constitutes failure}
+
+### Contract for Task 2 — {title}
+**Check type:** {file-exists | grep-match | command-exit | behavioral}
+**Command:** `{exact command}`
+**Expected:** {expected output}
+**Fail if:** {failure condition}
