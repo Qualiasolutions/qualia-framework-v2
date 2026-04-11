@@ -86,7 +86,7 @@ function askCode() {
   return new Promise((resolve) => {
     const rl = createInterface({ input: process.stdin, output: process.stdout });
     console.log("");
-    console.log(`${TEAL}  ⬢ Qualia Framework v2${RESET}`);
+    console.log(`${TEAL}  ⬢ Qualia Framework${RESET}`);
     console.log(`${DIM}  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}`);
     console.log("");
     rl.question(`  ${WHITE}Enter install code:${RESET} `, (answer) => {
@@ -307,7 +307,7 @@ Recurring issues and their solutions.
 ---
 
 ## Install code "Invalid" — user typed letter O instead of digit 0
-**Symptom:** \`npx qualia-framework-v2 install\` rejects \`QS-NAME-O1\` (letter O in suffix).
+**Symptom:** \`npx qualia-framework install\` rejects \`QS-NAME-O1\` (letter O in suffix).
 **Cause:** Team codes use digit zero (\`-01\`, \`-02\`, etc.), not letter O.
 **Fix:** Since v2.8.1, install.js auto-normalizes: \`QS-FAWZI-O1\` → \`QS-FAWZI-01\`. The normalization only touches the segment after the last dash, so \`QS-MOAYAD-03\` (real O in name) is preserved.
 **Framework version:** Fixed in v2.8.1.
@@ -322,7 +322,7 @@ Recurring issues and their solutions.
 
 ---
 
-## \`npx qualia-framework-v2 update\` fails on Windows or Ubuntu
+## \`npx qualia-framework update\` fails on Windows or Ubuntu
 **Symptom:** Manual update command fails silently or with a shell parse error on Windows and Debian/Ubuntu.
 **Cause:** Before v2.8.0, cli.js cmdUpdate used \`execSync(\\\`npx ... install <<< "\${code}"\\\`, { shell: true })\`. The \`<<<\` here-string is bash-only; cmd.exe doesn't understand it, and \`/bin/sh\` on Debian/Ubuntu is \`dash\` which also lacks it.
 **Fix:** v2.8.0 replaced with \`spawnSync("npx", [...], { input: code + "\\\\n", shell: process.platform === "win32" })\`. Uses stdin pipe instead of here-string.
@@ -538,6 +538,18 @@ Client-specific preferences, design choices, and requirements. Loaded by \`/qual
   if (!settings.permissions) settings.permissions = {};
   if (!settings.permissions.allow) settings.permissions.allow = [];
   if (!settings.permissions.deny) settings.permissions.deny = [];
+
+  // ─── Optional: next-devtools MCP ─────────────────────────
+  // Wire next-devtools-mcp for runtime error visibility in Next.js projects
+  if (!settings.mcpServers) settings.mcpServers = {};
+  if (!settings.mcpServers["next-devtools"]) {
+    settings.mcpServers["next-devtools"] = {
+      command: "npx",
+      args: ["next-devtools-mcp@0.3.10"],
+      disabled: false,
+    };
+    ok("MCP: next-devtools (runtime error visibility for Next.js projects)");
+  }
 
   fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
 

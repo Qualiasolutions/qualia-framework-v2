@@ -628,6 +628,18 @@ function cmdMigrate() {
     console.log(`  ${GREEN}+${RESET} Added status line`);
   }
 
+  // 3b. Add next-devtools MCP if not present
+  if (!settings.mcpServers) settings.mcpServers = {};
+  if (!settings.mcpServers["next-devtools"]) {
+    settings.mcpServers["next-devtools"] = {
+      command: "npx",
+      args: ["next-devtools-mcp@0.3.10"],
+      disabled: false,
+    };
+    changes++;
+    console.log(`  ${GREEN}+${RESET} Added next-devtools MCP server`);
+  }
+
   // 4. Update config version
   cfg.version = PKG.version;
   cfg.migrated_at = new Date().toISOString().split("T")[0];
