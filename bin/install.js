@@ -611,6 +611,8 @@ Client-specific preferences, design choices, and requirements. Loaded by \`/qual
   console.log(`  ${DIM}Stuck?${RESET}          ${TEAL}/qualia${RESET}`);
   console.log("");
   console.log(`  ${DIM}${RULE}${RESET}`);
+  console.log(`  ${TEAL}${BOLD}Welcome to the future with Qualia.${RESET}`);
+  console.log(`  ${DIM}${RULE}${RESET}`);
   console.log("");
 }
 
