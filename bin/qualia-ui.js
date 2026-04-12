@@ -16,6 +16,7 @@
 //   done <N> <title> [commit]            — task line (completed)
 //   next <command>                       — "Run: /qualia-X" footer
 //   end <status> [next-command]          — closing banner with optional next
+//   update <current> <latest>            — sticky framework update banner
 
 const fs = require("fs");
 const path = require("path");
@@ -258,6 +259,19 @@ function cmdEnd(status, nextCmd) {
   console.log("");
 }
 
+function cmdUpdate(current, latest) {
+  if (!current || !latest) return;
+  console.log("");
+  console.log(`  ${YELLOW}${BOLD}▲${RESET} ${WHITE}${BOLD}QUALIA FRAMEWORK UPDATE AVAILABLE${RESET}`);
+  console.log(`  ${DIM2}${RULE}${RESET}`);
+  console.log(`  ${pad(DIM + "Current" + RESET, 20)}${DIM}${current}${RESET}`);
+  console.log(`  ${pad(DIM + "Latest" + RESET, 20)}${GREEN}${BOLD}${latest}${RESET}`);
+  console.log(`  ${pad(DIM + "Update" + RESET, 20)}${TEAL}npx qualia-framework@latest install${RESET}`);
+  console.log(`  ${DIM2}${RULE}${RESET}`);
+  console.log(`  ${DIM}This notice shows every session until you update.${RESET}`);
+  console.log("");
+}
+
 // ─── Main ────────────────────────────────────────────────
 const [cmd, ...rest] = process.argv.slice(2);
 switch (cmd) {
@@ -276,9 +290,10 @@ switch (cmd) {
   case "done":     cmdDone(rest[0], rest[1], rest[2]); break;
   case "next":     cmdNext(rest.join(" ")); break;
   case "end":      cmdEnd(rest[0], rest.slice(1).join(" ")); break;
+  case "update":   cmdUpdate(rest[0], rest[1]); break;
   default:
     console.error(
-      `Usage: qualia-ui.js <banner|context|divider|ok|fail|warn|info|spawn|wave|task|done|next|end> [args]`
+      `Usage: qualia-ui.js <banner|context|divider|ok|fail|warn|info|spawn|wave|task|done|next|end|update> [args]`
     );
     process.exit(1);
 }

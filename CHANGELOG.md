@@ -8,6 +8,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Note: git tags for historical versions were not retained; commit references are approximate
 > and dates reflect commit history rather than npm publish timestamps.
 
+## [3.2.0] — 2026-04-12
+
+Sticky update notifications for employees, env access unblocked for the whole
+team, new `/qualia-optimize` deep optimization skill.
+
+### Added
+- **Sticky update banner** for EMPLOYEE installs. When `auto-update.js` detects
+  a newer version on npm, it writes `.qualia-update-available.json` instead of
+  auto-installing. `session-start.js` renders a visible banner every session
+  until the employee runs `npx qualia-framework@latest install`. OWNER still
+  auto-updates silently — never sees the banner.
+- **`qualia-optimize`** skill — deep optimization pass that reads `.planning/`
+  AND the codebase together. Spawns parallel specialists (frontend, backend,
+  performance, architecture). Modes: `full`, `--perf`, `--ui`, `--backend`,
+  `--alignment`, `--fix`.
+- `bin/qualia-ui.js` — new `update <current> <latest>` command renders the
+  sticky banner.
+- `bin/install.js` — new `DEPRECATED_HOOKS` cleanup list proactively removes
+  retired hooks from existing installs during upgrade.
+
+### Changed
+- `hooks/auto-update.js` now branches on `cfg.role`. OWNER gets the silent
+  background install (unchanged). EMPLOYEE writes the sticky notification so
+  they can no longer ignore updates by accident.
+
+### Removed
+- **`hooks/block-env-edit.js`** — team decision. Claude now has full read/write
+  on `.env*` files across the team. `install.js` no longer wires this hook and
+  `DEPRECATED_HOOKS` purges it from existing installs on upgrade.
+- Employee role descriptions updated — no longer claim "cannot edit .env files".
+
 ## [3.1.0] — 2026-04-12
 
 Package rename and gap closure release. The package is now `qualia-framework`

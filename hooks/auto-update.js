@@ -66,6 +66,11 @@ try {
 
   // Fork the check-and-update into a detached background process so the hook
   // returns immediately and Claude Code is never blocked.
+  //
+  // OWNER: silent auto-install (unchanged behavior).
+  // EMPLOYEE: write a sticky notification file — session-start.js renders a
+  // banner every session until they run the update manually. Fawzi (OWNER)
+  // never sees the banner because his framework auto-updates ahead of it.
   const script = `
     const fs = require("fs");
     const path = require("path");
@@ -73,6 +78,7 @@ try {
     const CLAUDE_DIR = ${JSON.stringify(CLAUDE_DIR)};
     const LOCK_FILE = ${JSON.stringify(LOCK_FILE)};
     const CONFIG_FILE = ${JSON.stringify(CONFIG_FILE)};
+    const NOTIF_FILE = path.join(CLAUDE_DIR, ".qualia-update-available.json");
     const cfg = ${JSON.stringify(cfg)};
     try {
       fs.writeFileSync(LOCK_FILE, String(process.pid));
@@ -82,7 +88,7 @@ try {
         shell: process.platform === "win32",
       });
       const latest = ((r.stdout || "").trim());
-      if (!latest) { fs.unlinkSync(LOCK_FILE); process.exit(0); }
+      if (!latest) { try { fs.unlinkSync(LOCK_FILE); } catch {} process.exit(0); }
       const cmp = (a, b) => {
         const pa = a.split(".").map(Number), pb = b.split(".").map(Number);
         for (let i = 0; i < 3; i++) {
@@ -92,13 +98,29 @@ try {
         return 0;
       };
       if (cmp(latest, cfg.version) > 0) {
-        // Silent update — pipe the install code via stdin
-        const child = spawnSync("npx", ["qualia-framework@latest", "install"], {
-          input: cfg.code + "\\n",
-          timeout: 120000,
-          stdio: ["pipe", "ignore", "ignore"],
-          shell: process.platform === "win32",
-        });
+        if (cfg.role === "OWNER") {
+          // Silent auto-install for OWNER — no notification banner ever shown.
+          spawnSync("npx", ["qualia-framework@latest", "install"], {
+            input: cfg.code + "\\n",
+            timeout: 120000,
+            stdio: ["pipe", "ignore", "ignore"],
+            shell: process.platform === "win32",
+          });
+          try { fs.unlinkSync(NOTIF_FILE); } catch {}
+        } else {
+          // EMPLOYEE: write sticky notification. session-start.js will render
+          // a visible banner every session until the employee runs the update.
+          try {
+            fs.writeFileSync(NOTIF_FILE, JSON.stringify({
+              current: cfg.version,
+              latest: latest,
+              detected_at: new Date().toISOString(),
+            }, null, 2));
+          } catch {}
+        }
+      } else {
+        // Already up to date — clear any stale notification file.
+        try { fs.unlinkSync(NOTIF_FILE); } catch {}
       }
     } catch {}
     try { fs.unlinkSync(LOCK_FILE); } catch {}

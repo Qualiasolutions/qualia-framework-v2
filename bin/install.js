@@ -26,22 +26,22 @@ const DEFAULT_TEAM = {
   "QS-HASAN-02": {
     name: "Hasan",
     role: "EMPLOYEE",
-    description: "Developer. Feature branches only. Cannot push to main or edit .env files.",
+    description: "Developer. Feature branches only. Cannot push to main.",
   },
   "QS-MOAYAD-03": {
     name: "Moayad",
     role: "EMPLOYEE",
-    description: "Developer. Feature branches only. Cannot push to main or edit .env files.",
+    description: "Developer. Feature branches only. Cannot push to main.",
   },
   "QS-RAMA-04": {
     name: "Rama",
     role: "EMPLOYEE",
-    description: "Developer. Feature branches only. Cannot push to main or edit .env files.",
+    description: "Developer. Feature branches only. Cannot push to main.",
   },
   "QS-SALLY-05": {
     name: "Sally",
     role: "EMPLOYEE",
-    description: "Developer. Feature branches only. Cannot push to main or edit .env files.",
+    description: "Developer. Feature branches only. Cannot push to main.",
   },
 };
 
@@ -208,6 +208,13 @@ async function main() {
       }
     }
   } catch {}
+  // v3.2.0: purge deprecated hooks from existing installs on upgrade.
+  // block-env-edit.js was retired — team now has full read/write on .env*.
+  const DEPRECATED_HOOKS = ["block-env-edit.js"];
+  for (const f of DEPRECATED_HOOKS) {
+    const p = path.join(hooksDest, f);
+    try { if (fs.existsSync(p)) fs.unlinkSync(p); } catch {}
+  }
   for (const file of fs.readdirSync(hooksSource)) {
     try {
       const dest = path.join(hooksDest, file);
@@ -523,12 +530,6 @@ Client-specific preferences, design choices, and requirements. Loaded by \`/qual
         hooks: [
           {
             type: "command",
-            command: nodeCmd("block-env-edit.js"),
-            timeout: 5,
-            statusMessage: "⬢ Checking file permissions...",
-          },
-          {
-            type: "command",
             if: "Edit(*migration*)|Write(*migration*)|Edit(*.sql)|Write(*.sql)",
             command: nodeCmd("migration-guard.js"),
             timeout: 10,
@@ -572,7 +573,7 @@ Client-specific preferences, design choices, and requirements. Loaded by \`/qual
 
   fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
 
-  ok("Hooks: session-start, auto-update, branch-guard, pre-push, block-env-edit, migration-guard, deploy-gate, pre-compact");
+  ok("Hooks: session-start, auto-update, branch-guard, pre-push, migration-guard, deploy-gate, pre-compact");
   ok("Status line + spinner configured");
   ok("Environment variables + permissions");
 

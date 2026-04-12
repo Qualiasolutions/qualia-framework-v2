@@ -806,7 +806,7 @@ waves: 1
 describe("Hooks", () => {
   it("all hooks pass syntax check", () => {
     const hooks = fs.readdirSync(HOOKS).filter(f => f.endsWith(".js"));
-    assert.ok(hooks.length >= 8, `Expected 8+ hooks, found ${hooks.length}`);
+    assert.ok(hooks.length >= 7, `Expected 7+ hooks, found ${hooks.length}`);
     for (const hook of hooks) {
       const r = spawnSync(process.execPath, ["--check", path.join(HOOKS, hook)], {
         encoding: "utf8", timeout: 5000,
@@ -880,49 +880,8 @@ describe("Hooks", () => {
     assert.equal(r.status, 0);
   });
 
-  // --- block-env-edit.js ---
-
-  it("block-env-edit blocks .env files", () => {
-    const r = runHook("block-env-edit.js", {
-      tool_input: { file_path: "/project/.env" },
-    });
-    assert.equal(r.status, 2);
-  });
-
-  it("block-env-edit blocks .env.local files", () => {
-    const r = runHook("block-env-edit.js", {
-      tool_input: { file_path: "/project/.env.local" },
-    });
-    assert.equal(r.status, 2);
-  });
-
-  it("block-env-edit blocks .env.production files", () => {
-    const r = runHook("block-env-edit.js", {
-      tool_input: { file_path: ".env.production" },
-    });
-    assert.equal(r.status, 2);
-  });
-
-  it("block-env-edit blocks Windows-style .env paths", () => {
-    const r = runHook("block-env-edit.js", {
-      tool_input: { file_path: "C:\\project\\.env.local" },
-    });
-    assert.equal(r.status, 2);
-  });
-
-  it("block-env-edit allows non-env files", () => {
-    const r = runHook("block-env-edit.js", {
-      tool_input: { file_path: "src/app.tsx" },
-    });
-    assert.equal(r.status, 0);
-  });
-
-  it("block-env-edit allows component files", () => {
-    const r = runHook("block-env-edit.js", {
-      tool_input: { file_path: "components/Footer.tsx" },
-    });
-    assert.equal(r.status, 0);
-  });
+  // block-env-edit.js was retired in v3.2.0 — team now has full read/write on
+  // .env* files. See CHANGELOG v3.2.0 and bin/install.js DEPRECATED_HOOKS.
 
   // --- pre-push.js ---
 
@@ -1756,12 +1715,12 @@ describe("install.js", () => {
     }
   });
 
-  it("8 hooks installed", () => {
+  it("7 hooks installed (block-env-edit removed in v3.2.0)", () => {
     const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "qualia-install-"));
     try {
       runInstall("QS-FAWZI-01", tmpHome);
       const hooks = fs.readdirSync(path.join(tmpHome, ".claude", "hooks")).filter(f => f.endsWith(".js"));
-      assert.equal(hooks.length, 8);
+      assert.equal(hooks.length, 7);
     } finally {
       fs.rmSync(tmpHome, { recursive: true, force: true });
     }

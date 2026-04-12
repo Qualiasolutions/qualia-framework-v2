@@ -18,6 +18,7 @@ const HOME = os.homedir();
 const UI = path.join(HOME, ".claude", "bin", "qualia-ui.js");
 const STATE_FILE = path.join(".planning", "STATE.md");
 const CONTINUE_HERE = ".continue-here.md";
+const NOTIF_FILE = path.join(HOME, ".claude", ".qualia-update-available.json");
 
 function runUi(...args) {
   if (!fs.existsSync(UI)) return;
@@ -65,7 +66,23 @@ function fallbackText() {
   }
 }
 
+function maybeRenderUpdateBanner() {
+  // EMPLOYEE-only sticky banner. auto-update.js writes NOTIF_FILE when a new
+  // version is detected; we render it every session until the user actually
+  // runs `npx qualia-framework@latest install`. The file is cleared by
+  // auto-update.js once the install completes or the version catches up.
+  if (!fs.existsSync(NOTIF_FILE) || !fs.existsSync(UI)) return;
+  try {
+    const notif = JSON.parse(fs.readFileSync(NOTIF_FILE, "utf8"));
+    if (notif && notif.current && notif.latest) {
+      runUi("update", notif.current, notif.latest);
+    }
+  } catch {}
+}
+
 try {
+  maybeRenderUpdateBanner();
+
   if (!fs.existsSync(UI)) {
     fallbackText();
   } else if (fs.existsSync(STATE_FILE)) {
