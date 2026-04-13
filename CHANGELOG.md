@@ -8,6 +8,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Note: git tags for historical versions were not retained; commit references are approximate
 > and dates reflect commit history rather than npm publish timestamps.
 
+## [3.3.1] — 2026-04-13
+
+Patch release. Fixes broken `@path` references inside the v3.3.0 deep-flow
+skills that were caught by post-release verification. Subagent spawning
+itself was unaffected (resolves via frontmatter `name:`), but the literal
+`Read your role: @~/.claude/agents/qualia-{name}.md` instruction passed
+into the spawned agent's prompt would fail to resolve the file because
+agents ship without the `qualia-` prefix (e.g. `researcher.md`, not
+`qualia-researcher.md`).
+
+### Fixed
+
+- `skills/qualia-new/SKILL.md` — 6 refs rewritten (4× researcher,
+  1× research-synthesizer, 1× roadmapper).
+- `skills/qualia-plan/SKILL.md` — 3 refs rewritten (2× planner,
+  1× plan-checker).
+- `skills/qualia-research/SKILL.md` — 1 researcher ref rewritten.
+- `skills/qualia-milestone/SKILL.md` — 1 roadmapper ref rewritten.
+- `skills/qualia-optimize/SKILL.md` — removed dead call to
+  `~/.claude/qualia-framework/bin/qualia-tools.js` (never shipped in v3.x);
+  replaced with a plain `git add && git commit`.
+
+All 128 tests still green.
+
 ## [3.3.0] — 2026-04-13
 
 Deep flow release. Adds the comprehensive v2.6-era capabilities (research, plan-check,
