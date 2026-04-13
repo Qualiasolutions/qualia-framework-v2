@@ -393,9 +393,15 @@ function cmdTransition(opts) {
     { ...opts, phase }
   );
   if (!check.ok) {
-    // Force only bypasses status-ordering errors (PRECONDITION_FAILED, GAP_CYCLE_LIMIT).
-    // Never bypass MISSING_FILE, MISSING_ARG, INVALID_PLAN — those cause broken state.
-    const forceableErrors = ["PRECONDITION_FAILED", "GAP_CYCLE_LIMIT"];
+    // Force bypasses status-ordering errors AND plan-content errors. The use case
+    // is retroactive bookkeeping: a phase was built without /qualia-plan and the
+    // user is catching STATE.md up to reality. `--force` never bypasses MISSING_FILE
+    // or MISSING_ARG — those would leave the state machine pointing at nothing.
+    const forceableErrors = [
+      "PRECONDITION_FAILED",
+      "GAP_CYCLE_LIMIT",
+      "INVALID_PLAN",
+    ];
     if (opts.force && forceableErrors.includes(check.error)) {
       console.error(`WARNING: Forcing transition despite: ${check.message}`);
     } else {

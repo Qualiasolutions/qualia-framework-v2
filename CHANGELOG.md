@@ -8,6 +8,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Note: git tags for historical versions were not retained; commit references are approximate
 > and dates reflect commit history rather than npm publish timestamps.
 
+## [3.3.2] — 2026-04-13
+
+Patch release. `state.js transition --force` now bypasses `INVALID_PLAN`
+errors so retroactive bookkeeping works.
+
+### Fixed
+
+- **`state.js transition --to planned --force` now unblocks retroactive
+  documentation.** When a phase is built without `/qualia-plan` (e.g. an
+  employee shipped the work before the framework was wired up), the
+  retroactive plan file is documentation, not a runnable plan — so it
+  often lacks `**Done when:**` markers. Previously `--force` only
+  bypassed status-ordering errors and still hard-failed on
+  `INVALID_PLAN`, leaving STATE.md stuck behind reality. `--force` now
+  also bypasses `INVALID_PLAN`. It still refuses `MISSING_FILE` /
+  `MISSING_ARG` — those would point the state machine at nothing.
+- New test: `--force bypasses INVALID_PLAN (retroactive bookkeeping)`,
+  plus a sanity test that `--force` still rejects `MISSING_FILE`.
+  Suite is now 129 tests, all green.
+
 ## [3.3.1] — 2026-04-13
 
 Patch release. Fixes broken `@path` references inside the v3.3.0 deep-flow

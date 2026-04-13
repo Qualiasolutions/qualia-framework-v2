@@ -774,14 +774,31 @@ waves: 1
     }
   });
 
-  it("--force does NOT bypass INVALID_PLAN", () => {
+  it("--force bypasses INVALID_PLAN (retroactive bookkeeping)", () => {
+    // Use case: a phase was built without /qualia-plan and the user is
+    // catching STATE.md up to reality. The plan file exists as documentation
+    // but lacks `**Done when:**` markers — that should not block --force.
     const tmpDir = makeProject();
     try {
       fs.writeFileSync(path.join(tmpDir, ".planning", "phase-1-plan.md"), "# No tasks here");
       const r = runState(["transition", "--to", "planned", "--force"], tmpDir);
+      assert.equal(r.status, 0);
+      const out = JSON.parse(r.stdout);
+      assert.equal(out.ok, true);
+      assert.equal(out.status, "planned");
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("--force still rejects MISSING_FILE", () => {
+    // Sanity: --force unblocks plan-content errors but not "no plan at all".
+    const tmpDir = makeProject();
+    try {
+      const r = runState(["transition", "--to", "planned", "--force"], tmpDir);
       assert.equal(r.status, 1);
       const out = JSON.parse(r.stdout);
-      assert.equal(out.error, "INVALID_PLAN");
+      assert.equal(out.error, "MISSING_FILE");
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
