@@ -14,6 +14,12 @@ const { spawnSync } = require("child_process");
 
 const _traceStart = Date.now();
 
+// ANSI colors used by the no-project welcome panel. Defined here because this
+// file does not import qualia-ui (the hook must run even on a broken install).
+const TEAL = "\x1b[38;2;0;206;209m";
+const DIM = "\x1b[38;2;80;90;100m";
+const RESET = "\x1b[0m";
+
 const HOME = os.homedir();
 const UI = path.join(HOME, ".claude", "bin", "qualia-ui.js");
 const STATE_FILE = path.join(".planning", "STATE.md");

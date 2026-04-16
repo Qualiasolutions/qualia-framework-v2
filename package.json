@@ -1,6 +1,6 @@
 {
   "name": "qualia-framework",
-  "version": "3.4.1",
+  "version": "3.4.2",
   "description": "Claude Code workflow framework by Qualia Solutions. Plan, build, verify, ship.",
   "bin": {
     "qualia-framework": "./bin/cli.js"

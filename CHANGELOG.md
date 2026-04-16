@@ -8,6 +8,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Note: git tags for historical versions were not retained; commit references are approximate
 > and dates reflect commit history rather than npm publish timestamps.
 
+## [3.4.2] — 2026-04-17
+
+P0 hotfix release. Closes 7 critical bugs surfaced by a deep audit.
+
+### Fixed
+
+- **`pre-push.js` stamp now actually reaches the remote.** Previously the hook
+  wrote `last_commit` + `last_updated` to `tracking.json` and `git add`-ed it,
+  but the push itself ran on a snapshot prepared before the hook — so the
+  stamp never made it onto the wire. The ERP, which reads `tracking.json`
+  straight from git, saw stale data forever. Hook now creates a real bot
+  commit (`--no-verify --no-gpg-sign --author="Qualia Framework <bot@…>"`)
+  so the stamp ships with the push that triggered it.
+- **`session-start.js` no longer silently fails on first run.** `TEAL`,
+  `RESET`, `DIM` ANSI constants were referenced in the no-project welcome
+  branch but never defined in the file (only in `bin/install.js`). The outer
+  `try/catch` swallowed the `ReferenceError`, so new users saw a blank
+  session. Constants now defined at top of file.
+- **`/qualia-optimize` works on fresh installs.** Skill spawned
+  `frontend-agent`, `backend-agent`, `performance-oracle`,
+  `architecture-strategist` — none of which ship with the framework.
+  Rewritten to use `general-purpose` with the same specialized prompts.
+- **`.qualia-config.json` is now mode 0600.** Previously written with default
+  0644, so any local user could edit `role` to `OWNER` and bypass
+  `branch-guard`. The role bit is now access-restricted.
+- **Default ERP key no longer shipped.** Installs no longer write the
+  hardcoded literal `"qualia-claude-2026"`. New sources, in order:
+  `$QUALIA_ERP_KEY` env var → existing `~/.claude/.erp-api-key` →
+  ERP disabled until configured. Also chmods existing key file to 0600.
+- **Atomic file writes for `STATE.md` and `tracking.json`.** Previous
+  direct `writeFileSync` could leave half-written files on SIGINT, OOM, or
+  AV scanner interruption — the next `cmdCheck` would return `NO_PROJECT`.
+  All writes now go through `tmp + rename` (atomic on POSIX, near-atomic
+  on NTFS). Added `.planning/.state.lock` exclusive lockfile so two
+  concurrent state.js mutations can't race.
+- **`close-milestone` is now idempotent.** Sentinel `last_closed_milestone`
+  prevents re-running from double-counting `milestones_completed` and
+  `total_phases`. Pass `--force` to deliberately re-close.
+- **`backfill-lifetime` no longer destroys history.** Now uses `Math.max`
+  instead of overwrite — recomputed values from the current milestone's
+  STATE.md cannot reduce lifetime counters that were already accumulated
+  by `close-milestone`.
+
+### Added
+
+- **`init` refuses to clobber an existing project.** `state.js init` against
+  an active `.planning/STATE.md` now errors with `ALREADY_INITIALIZED`.
+  Pass `--force` to re-initialize (lifetime is still preserved).
+- **`_trace` signature normalized to 3 args** — `_trace(event, result, data)`.
+  Old call sites passing the result string in the data slot produced
+  malformed JSONL. Telemetry is now well-formed.
+- 8 new tests covering the fixes — pre-push behavioral mutation +
+  bot-commit, init guard, close-milestone idempotency, backfill Math.max,
+  atomic write cleanup, lock release. Suite is now 137 tests, all green.
+
+### Migration
+
+- Existing installs will pick up the fixes via auto-update or
+  `npx qualia-framework@latest install`.
+- The `qualia-claude-2026` shared key is grandfathered server-side for 30
+  days. After that, every employee needs a per-user token.
+- `init --force` is required to re-initialize an existing project (was
+  silent before — a footgun).
+
 ## [3.4.1] — 2026-04-14
 
 ### Added

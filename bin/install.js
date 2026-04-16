@@ -497,16 +497,39 @@ Client-specific preferences, design choices, and requirements. Loaded by \`/qual
       api_key_file: ".erp-api-key",
     },
   };
-  fs.writeFileSync(configFile, JSON.stringify(config, null, 2) + "\n");
+  // mode 0o600: this file holds the role bit (OWNER vs EMPLOYEE) which the
+  // branch-guard hook trusts. Default 0644 would let any local user edit it
+  // and self-elevate.
+  fs.writeFileSync(configFile, JSON.stringify(config, null, 2) + "\n", { mode: 0o600 });
+  try { fs.chmodSync(configFile, 0o600); } catch {}
 
   // ─── ERP API key (for report uploads) ──────────────────
+  // Per-user keys, never a hardcoded shared default. Sources, in order:
+  //   1. $QUALIA_ERP_KEY env var at install time (CI / scripted installs)
+  //   2. Existing ~/.claude/.erp-api-key (preserved across re-installs)
+  //   3. Skip — ERP disabled in config until user runs `qualia-framework set-erp-key`
   printSection("ERP Integration");
   const erpKeyFile = path.join(CLAUDE_DIR, ".erp-api-key");
-  if (!fs.existsSync(erpKeyFile)) {
-    fs.writeFileSync(erpKeyFile, "qualia-claude-2026", { mode: 0o600 });
-    ok(".erp-api-key (created)");
+  const envKey = (process.env.QUALIA_ERP_KEY || "").trim();
+  if (envKey) {
+    fs.writeFileSync(erpKeyFile, envKey, { mode: 0o600 });
+    try { fs.chmodSync(erpKeyFile, 0o600); } catch {}
+    ok(".erp-api-key (from $QUALIA_ERP_KEY)");
+  } else if (fs.existsSync(erpKeyFile)) {
+    try { fs.chmodSync(erpKeyFile, 0o600); } catch {}
+    ok(".erp-api-key (existing — preserved)");
   } else {
-    ok(".erp-api-key (exists)");
+    // Disable ERP in the config we just wrote.
+    try {
+      const cfg = JSON.parse(fs.readFileSync(configFile, "utf8"));
+      cfg.erp = { ...(cfg.erp || {}), enabled: false };
+      fs.writeFileSync(configFile, JSON.stringify(cfg, null, 2) + "\n", { mode: 0o600 });
+      try { fs.chmodSync(configFile, 0o600); } catch {}
+    } catch {}
+    log(`${YELLOW}!${RESET} ERP key not configured — reports won't upload until set.`);
+    log(`${DIM}  Set with:${RESET} ${TEAL}export QUALIA_ERP_KEY=...${RESET} ${DIM}then re-install,${RESET}`);
+    log(`${DIM}  or write the key to:${RESET} ${WHITE}${erpKeyFile}${RESET} ${DIM}(mode 0600).${RESET}`);
+    log(`${DIM}  Get a key from Fawzi.${RESET}`);
   }
 
   // ─── Configure settings.json ───────────────────────────

@@ -8,13 +8,76 @@ const path = require("path");
 const PLANNING = ".planning";
 const STATE_FILE = path.join(PLANNING, "STATE.md");
 const TRACKING_FILE = path.join(PLANNING, "tracking.json");
+const LOCK_FILE = path.join(PLANNING, ".state.lock");
+
+// ─── Atomic write (tmp + rename) ─────────────────────────
+// Prevents half-written files when SIGINT, OOM, or AV scanners
+// interrupt mid-write. Same-filesystem rename is atomic on POSIX
+// and best-effort atomic on Windows (NTFS replaces in one syscall).
+function atomicWrite(file, content) {
+  const tmp = `${file}.tmp.${process.pid}`;
+  fs.writeFileSync(tmp, content);
+  try {
+    fs.renameSync(tmp, file);
+  } catch (err) {
+    // Cleanup tmp on failure (Windows EBUSY, EPERM, etc.)
+    try { fs.unlinkSync(tmp); } catch {}
+    throw err;
+  }
+}
+
+// ─── Exclusive lock ──────────────────────────────────────
+// Prevents two concurrent state.js mutations from racing on the dual
+// STATE.md + tracking.json write. Read commands (check, validate-plan)
+// don't take the lock — only mutators do.
+function acquireLock(timeoutMs = 5000) {
+  if (!fs.existsSync(PLANNING)) return null; // nothing to lock yet
+  const start = Date.now();
+  const ours = `${process.pid}@${new Date().toISOString()}`;
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const fd = fs.openSync(LOCK_FILE, "wx");
+      fs.writeSync(fd, ours);
+      fs.closeSync(fd);
+      return LOCK_FILE;
+    } catch (err) {
+      if (err.code !== "EEXIST") throw err;
+      // Stale lock? If older than 30s, steal it.
+      try {
+        const stat = fs.statSync(LOCK_FILE);
+        if (Date.now() - stat.mtimeMs > 30_000) {
+          fs.unlinkSync(LOCK_FILE);
+          continue;
+        }
+      } catch {}
+      // Spin-wait briefly. State ops are fast; conflicts rare.
+      const t = Date.now() + 50;
+      while (Date.now() < t) {}
+    }
+  }
+  // Couldn't acquire — proceed unlocked rather than block the user.
+  return null;
+}
+
+function releaseLock(lock) {
+  if (!lock) return;
+  try { fs.unlinkSync(lock); } catch {}
+}
 
 // ─── Trace ──────────────────────────────────────────────
-function _trace(event, data) {
+// Signature normalized: _trace(event, result, data?). Old callers passed
+// (event, data) with `result` as a string in `data` — that produced
+// nonsense JSONL ({0:"a",1:"l",2:"l",...}). Always use the 3-arg form.
+function _trace(event, result, data) {
   try {
     const traceDir = path.join(require("os").homedir(), ".claude", ".qualia-traces");
     if (!fs.existsSync(traceDir)) fs.mkdirSync(traceDir, { recursive: true });
-    const entry = { hook: event, timestamp: new Date().toISOString(), ...data };
+    const entry = {
+      hook: event,
+      result: result || "allow",
+      timestamp: new Date().toISOString(),
+      ...(data && typeof data === "object" ? data : {}),
+    };
     const file = path.join(traceDir, `${new Date().toISOString().split("T")[0]}.jsonl`);
     fs.appendFileSync(file, JSON.stringify(entry) + "\n");
   } catch { /* trace failures must not disrupt state machine */ }
@@ -48,7 +111,7 @@ function readTracking() {
 }
 
 function writeTracking(t) {
-  fs.writeFileSync(TRACKING_FILE, JSON.stringify(t, null, 2) + "\n");
+  atomicWrite(TRACKING_FILE, JSON.stringify(t, null, 2) + "\n");
 }
 
 // Ensure lifetime + milestone fields exist (backward compat for old tracking files)
@@ -198,7 +261,7 @@ Last session: ${now}
 Last worked by: ${s.assigned_to}
 Resume: ${s.resume || "—"}
 `;
-  fs.writeFileSync(STATE_FILE, md);
+  atomicWrite(STATE_FILE, md);
 }
 
 // ─── Precondition Checks ─────────────────────────────────
@@ -512,21 +575,18 @@ function cmdTransition(opts) {
     writeStateMd(s);
     writeTracking(t);
   } catch (e) {
-    // Revert STATE.md on failure
-    if (backupState) fs.writeFileSync(STATE_FILE, backupState);
+    // Revert STATE.md on failure (atomic so the revert itself is safe)
+    if (backupState) atomicWrite(STATE_FILE, backupState);
     return output(fail("WRITE_ERROR", e.message));
   }
 
   // Skill outcome scoring — log transition for analytics
-  _trace("state-transition", {
-    result: "allow",
+  _trace("state-transition", "allow", {
     phase: s.phase,
     status: s.status,
     previous_status: prevStatus,
     verification: t.verification,
     gap_closure: prevStatus === "verified" && target === "planned",
-    duration_ms: 0,
-    extra: { verification: t.verification, gap_closure: prevStatus === "verified" && target === "planned" }
   });
 
   output({
@@ -543,6 +603,19 @@ function cmdTransition(opts) {
 
 function cmdInit(opts) {
   if (!opts.project) return output(fail("MISSING_ARG", "--project required"));
+
+  // Refuse to clobber an active project unless --force.
+  // Lifetime preservation runs lower in this fn — but current-phase fields
+  // (phase, status, wave, tasks_done, tasks_total, gap_cycles) ARE wiped
+  // on init, which is a footgun for an in-progress project.
+  if (!opts.force && fs.existsSync(STATE_FILE)) {
+    return output(
+      fail(
+        "ALREADY_INITIALIZED",
+        "Project already initialized at .planning/STATE.md. Use --force to re-initialize (preserves lifetime, resets current phase)."
+      )
+    );
+  }
 
   // Parse phases
   let phases = [];
@@ -840,6 +913,10 @@ function cmdValidatePlan(opts) {
 }
 
 // ─── Close Milestone ─────────────────────────────────────
+// Idempotent: a sentinel `lifetime.last_closed_milestone` records the most
+// recently closed milestone so re-running close-milestone (e.g., after a
+// hiccup) does NOT double-count. To re-close a milestone deliberately, pass
+// --force.
 function cmdCloseMilestone(opts) {
   const t = readTracking();
   const s = parseStateMd(readState());
@@ -849,8 +926,22 @@ function cmdCloseMilestone(opts) {
   ensureLifetime(t);
 
   const closedMilestone = t.milestone || 1;
+  if (
+    !opts.force &&
+    typeof t.lifetime.last_closed_milestone === "number" &&
+    t.lifetime.last_closed_milestone >= closedMilestone
+  ) {
+    return output(
+      fail(
+        "ALREADY_CLOSED",
+        `Milestone ${closedMilestone} was already closed (last_closed_milestone=${t.lifetime.last_closed_milestone}). Use --force to close again.`
+      )
+    );
+  }
+
   t.lifetime.milestones_completed += 1;
   t.lifetime.total_phases += (parseInt(t.total_phases) || 0);
+  t.lifetime.last_closed_milestone = closedMilestone;
   t.milestone = closedMilestone + 1;
   t.last_updated = new Date().toISOString();
 
@@ -920,13 +1011,13 @@ function cmdBackfillLifetime(opts) {
 
   const previous = { ...t.lifetime };
 
-  t.lifetime.phases_completed = phasesCompleted;
-  t.lifetime.tasks_completed = tasksCompleted;
-  // total_phases for current milestone (close-milestone handles cross-milestone)
-  if (t.lifetime.total_phases === 0 && t.lifetime.milestones_completed === 0) {
-    // First milestone, never closed — don't set total_phases here,
-    // it accumulates via close-milestone only
-  }
+  // Use Math.max — backfill must NEVER reduce lifetime counters. If the user
+  // ran close-milestone previously (rolling phases into lifetime) and then
+  // calls backfill, the recomputed value reflects only the current milestone
+  // and would otherwise destroy the historical accumulation.
+  t.lifetime.phases_completed = Math.max(t.lifetime.phases_completed || 0, phasesCompleted);
+  t.lifetime.tasks_completed = Math.max(t.lifetime.tasks_completed || 0, tasksCompleted);
+  // total_phases is accumulated by close-milestone only — backfill leaves it.
   t.last_updated = new Date().toISOString();
 
   writeTracking(t);
@@ -934,6 +1025,7 @@ function cmdBackfillLifetime(opts) {
   _trace("backfill-lifetime", "allow", {
     previous,
     computed: t.lifetime,
+    phases_scanned: s.phases.length,
   });
 
   output({
@@ -957,33 +1049,51 @@ function output(obj) {
 const [cmd, ...rest] = process.argv.slice(2);
 const opts = parseArgs(rest);
 
-switch (cmd) {
-  case "check":
-    cmdCheck(opts);
-    break;
-  case "transition":
-    cmdTransition(opts);
-    break;
-  case "init":
-    cmdInit(opts);
-    break;
-  case "fix":
-    cmdFix(opts);
-    break;
-  case "validate-plan":
-    cmdValidatePlan(opts);
-    break;
-  case "close-milestone":
-    cmdCloseMilestone(opts);
-    break;
-  case "backfill-lifetime":
-    cmdBackfillLifetime(opts);
-    break;
-  default:
-    output(
-      fail(
-        "UNKNOWN_COMMAND",
-        `Usage: state.js <check|transition|init|fix|validate-plan> [--options]`
-      )
-    );
+// Mutators must hold the .planning/.state.lock for the duration of their
+// dual STATE.md + tracking.json writes. Read commands (check, validate-plan)
+// don't need the lock. The lock is best-effort: if it can't be acquired
+// inside acquireLock's timeout, the command proceeds anyway — we'd rather
+// risk a rare race than hard-block the user.
+const READ_ONLY = new Set(["check", "validate-plan"]);
+let __lock = null;
+if (!READ_ONLY.has(cmd)) {
+  __lock = acquireLock();
+  process.on("exit", () => releaseLock(__lock));
+  process.on("SIGINT", () => { releaseLock(__lock); process.exit(130); });
+  process.on("SIGTERM", () => { releaseLock(__lock); process.exit(143); });
+}
+
+try {
+  switch (cmd) {
+    case "check":
+      cmdCheck(opts);
+      break;
+    case "transition":
+      cmdTransition(opts);
+      break;
+    case "init":
+      cmdInit(opts);
+      break;
+    case "fix":
+      cmdFix(opts);
+      break;
+    case "validate-plan":
+      cmdValidatePlan(opts);
+      break;
+    case "close-milestone":
+      cmdCloseMilestone(opts);
+      break;
+    case "backfill-lifetime":
+      cmdBackfillLifetime(opts);
+      break;
+    default:
+      output(
+        fail(
+          "UNKNOWN_COMMAND",
+          `Usage: state.js <check|transition|init|fix|validate-plan|close-milestone|backfill-lifetime> [--options]`
+        )
+      );
+  }
+} finally {
+  releaseLock(__lock);
 }

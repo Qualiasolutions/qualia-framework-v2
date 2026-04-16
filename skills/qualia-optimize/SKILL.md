@@ -140,7 +140,7 @@ For EVERY finding, output in this exact format:
 - **Fix**: [concrete fix suggestion]
 - **Severity**: CRITICAL | HIGH | MEDIUM | LOW
 </task>",
-  subagent_type="frontend-agent",
+  subagent_type="general-purpose",
   description="Frontend optimization analysis"
 )
 ```
@@ -193,7 +193,7 @@ For EVERY finding, output:
 - **Fix**: [concrete suggestion]
 - **Severity**: CRITICAL | HIGH | MEDIUM | LOW
 </task>",
-  subagent_type="backend-agent",
+  subagent_type="general-purpose",
   description="Backend optimization analysis"
 )
 ```
@@ -240,7 +240,7 @@ For EVERY finding, output:
 - **Fix**: [concrete suggestion]
 - **Severity**: CRITICAL | HIGH | MEDIUM | LOW
 </task>",
-  subagent_type="performance-oracle",
+  subagent_type="general-purpose",
   description="Performance optimization analysis"
 )
 ```
@@ -274,7 +274,7 @@ Output:
 - **Pattern consolidation** (where Wave 1 findings share a root cause)
 - Each finding in the same format: What/Where/Why/Fix/Severity
 </task>",
-  subagent_type="architecture-strategist",
+  subagent_type="general-purpose",
   description="Architecture synthesis"
 )
 ```

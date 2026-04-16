@@ -814,6 +814,156 @@ waves: 1
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
+
+  // ─── v3.4.2: init guard ────────────────────────────────
+  it("init refuses to clobber an existing project (no --force)", () => {
+    const tmpDir = makeProject();
+    try {
+      const r = spawnSync(process.execPath, [
+        path.join(BIN, "state.js"), "init",
+        "--project", "TestProject",
+        "--phases", '[{"name":"X","goal":"Y"}]',
+      ], { encoding: "utf8", cwd: tmpDir, timeout: 5000, stdio: ["pipe", "pipe", "pipe"] });
+      assert.equal(r.status, 1);
+      const out = JSON.parse(r.stdout);
+      assert.equal(out.error, "ALREADY_INITIALIZED");
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("init --force overwrites an existing project (preserves lifetime)", () => {
+    const tmpDir = makeProject();
+    try {
+      // Seed lifetime via close-milestone first
+      const c = spawnSync(process.execPath, [
+        path.join(BIN, "state.js"), "close-milestone",
+      ], { encoding: "utf8", cwd: tmpDir, timeout: 5000, stdio: ["pipe", "pipe", "pipe"] });
+      assert.equal(c.status, 0);
+      const tBefore = JSON.parse(fs.readFileSync(path.join(tmpDir, ".planning", "tracking.json"), "utf8"));
+      assert.ok(tBefore.lifetime.milestones_completed >= 1);
+
+      const r = spawnSync(process.execPath, [
+        path.join(BIN, "state.js"), "init",
+        "--project", "TestProject",
+        "--phases", '[{"name":"NewFoundation","goal":"X"}]',
+        "--force",
+      ], { encoding: "utf8", cwd: tmpDir, timeout: 5000, stdio: ["pipe", "pipe", "pipe"] });
+      assert.equal(r.status, 0);
+      const tAfter = JSON.parse(fs.readFileSync(path.join(tmpDir, ".planning", "tracking.json"), "utf8"));
+      assert.equal(tAfter.lifetime.milestones_completed, tBefore.lifetime.milestones_completed);
+      assert.equal(tAfter.phase, 1);
+      assert.equal(tAfter.status, "setup");
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  // ─── v3.4.2: close-milestone idempotency ───────────────
+  it("close-milestone refuses double-close (idempotency)", () => {
+    const tmpDir = makeProject();
+    try {
+      const r1 = spawnSync(process.execPath, [
+        path.join(BIN, "state.js"), "close-milestone",
+      ], { encoding: "utf8", cwd: tmpDir, timeout: 5000, stdio: ["pipe", "pipe", "pipe"] });
+      assert.equal(r1.status, 0);
+      const out1 = JSON.parse(r1.stdout);
+      assert.equal(out1.lifetime.milestones_completed, 1);
+
+      // Manually rewind milestone counter to simulate a re-run on the same closed milestone.
+      // (Real close-milestone advances t.milestone, so a true double-close requires
+      // putting milestone back to its prior value.)
+      const tFile = path.join(tmpDir, ".planning", "tracking.json");
+      const t = JSON.parse(fs.readFileSync(tFile, "utf8"));
+      t.milestone = out1.closed_milestone; // rewind
+      fs.writeFileSync(tFile, JSON.stringify(t, null, 2) + "\n");
+
+      const r2 = spawnSync(process.execPath, [
+        path.join(BIN, "state.js"), "close-milestone",
+      ], { encoding: "utf8", cwd: tmpDir, timeout: 5000, stdio: ["pipe", "pipe", "pipe"] });
+      assert.equal(r2.status, 1);
+      const out2 = JSON.parse(r2.stdout);
+      assert.equal(out2.error, "ALREADY_CLOSED");
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("close-milestone --force allows re-close", () => {
+    const tmpDir = makeProject();
+    try {
+      const r1 = spawnSync(process.execPath, [
+        path.join(BIN, "state.js"), "close-milestone",
+      ], { encoding: "utf8", cwd: tmpDir, timeout: 5000, stdio: ["pipe", "pipe", "pipe"] });
+      assert.equal(r1.status, 0);
+
+      const tFile = path.join(tmpDir, ".planning", "tracking.json");
+      const t = JSON.parse(fs.readFileSync(tFile, "utf8"));
+      t.milestone = JSON.parse(r1.stdout).closed_milestone;
+      fs.writeFileSync(tFile, JSON.stringify(t, null, 2) + "\n");
+
+      const r2 = spawnSync(process.execPath, [
+        path.join(BIN, "state.js"), "close-milestone", "--force",
+      ], { encoding: "utf8", cwd: tmpDir, timeout: 5000, stdio: ["pipe", "pipe", "pipe"] });
+      assert.equal(r2.status, 0);
+      const out2 = JSON.parse(r2.stdout);
+      assert.equal(out2.lifetime.milestones_completed, 2);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  // ─── v3.4.2: backfill never reduces lifetime (Math.max) ─
+  it("backfill-lifetime never reduces existing counters", () => {
+    const tmpDir = makeProject();
+    try {
+      // Seed lifetime with high values (simulating prior close-milestone)
+      const tFile = path.join(tmpDir, ".planning", "tracking.json");
+      const t = JSON.parse(fs.readFileSync(tFile, "utf8"));
+      t.lifetime.tasks_completed = 100;
+      t.lifetime.phases_completed = 20;
+      fs.writeFileSync(tFile, JSON.stringify(t, null, 2) + "\n");
+
+      // Backfill on a project with NO completed phases would compute 0/0
+      const r = spawnSync(process.execPath, [
+        path.join(BIN, "state.js"), "backfill-lifetime",
+      ], { encoding: "utf8", cwd: tmpDir, timeout: 5000, stdio: ["pipe", "pipe", "pipe"] });
+      assert.equal(r.status, 0);
+      const tAfter = JSON.parse(fs.readFileSync(tFile, "utf8"));
+      assert.equal(tAfter.lifetime.tasks_completed, 100, "backfill must NOT reduce tasks_completed");
+      assert.equal(tAfter.lifetime.phases_completed, 20, "backfill must NOT reduce phases_completed");
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  // ─── v3.4.2: atomic write leaves no .tmp file ──────────
+  it("transition leaves no .tmp file on success (atomic write)", () => {
+    const tmpDir = makeProject();
+    try {
+      makeValidPlan(tmpDir, 1);
+      const r = runState(["transition", "--to", "planned"], tmpDir);
+      assert.equal(r.status, 0);
+      const planning = path.join(tmpDir, ".planning");
+      const tmps = fs.readdirSync(planning).filter(f => f.includes(".tmp."));
+      assert.equal(tmps.length, 0, `Stale .tmp files: ${tmps.join(", ")}`);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  // ─── v3.4.2: lock file is released after mutation ──────
+  it("transition releases the .state.lock", () => {
+    const tmpDir = makeProject();
+    try {
+      makeValidPlan(tmpDir, 1);
+      runState(["transition", "--to", "planned"], tmpDir);
+      const lockExists = fs.existsSync(path.join(tmpDir, ".planning", ".state.lock"));
+      assert.equal(lockExists, false, "lock file should be released after transition");
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -910,6 +1060,53 @@ describe("Hooks", () => {
   it("pre-push.js stamps last_commit", () => {
     const content = fs.readFileSync(path.join(HOOKS, "pre-push.js"), "utf8");
     assert.match(content, /last_commit/);
+  });
+
+  // v3.4.2: behavioral test — the stamp must actually mutate tracking.json
+  // AND create a real commit so the push includes it.
+  it("pre-push.js mutates tracking.json AND commits the stamp", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "qualia-push-real-"));
+    try {
+      // Init a real git repo
+      const gitOpts = { cwd: tmpDir, encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"] };
+      spawnSync("git", ["init", "--initial-branch=main"], gitOpts);
+      spawnSync("git", ["config", "user.email", "test@example.com"], gitOpts);
+      spawnSync("git", ["config", "user.name", "Test"], gitOpts);
+      spawnSync("git", ["config", "commit.gpgsign", "false"], gitOpts);
+
+      // Seed .planning/tracking.json + an initial commit
+      fs.mkdirSync(path.join(tmpDir, ".planning"));
+      const tFile = path.join(tmpDir, ".planning", "tracking.json");
+      fs.writeFileSync(tFile, JSON.stringify({
+        project: "test", phase: 1, status: "setup", last_commit: "OLD", last_updated: "2020-01-01T00:00:00Z",
+      }, null, 2) + "\n");
+      spawnSync("git", ["add", "."], gitOpts);
+      spawnSync("git", ["commit", "-m", "seed", "--no-verify"], gitOpts);
+
+      const headBefore = spawnSync("git", ["rev-parse", "HEAD"], gitOpts).stdout.trim();
+
+      // Run the hook
+      const r = spawnSync(process.execPath, [path.join(HOOKS, "pre-push.js")], {
+        encoding: "utf8", cwd: tmpDir, timeout: 10000, stdio: ["pipe", "pipe", "pipe"],
+      });
+      assert.equal(r.status, 0, `pre-push exited ${r.status}: ${r.stderr}`);
+
+      // tracking.json must have been mutated
+      const t = JSON.parse(fs.readFileSync(tFile, "utf8"));
+      assert.notEqual(t.last_commit, "OLD", "last_commit should have been updated");
+      assert.notEqual(t.last_updated, "2020-01-01T00:00:00Z", "last_updated should have been updated");
+      assert.match(t.last_updated, /^\d{4}-\d{2}-\d{2}T/);
+
+      // A NEW commit must exist (this is the smoking-gun fix from v3.4.2)
+      const headAfter = spawnSync("git", ["rev-parse", "HEAD"], gitOpts).stdout.trim();
+      assert.notEqual(headAfter, headBefore, "pre-push must commit the stamp so it ships with the push");
+
+      // The new commit must be authored by the bot, not the user
+      const author = spawnSync("git", ["log", "-1", "--format=%an <%ae>"], gitOpts).stdout.trim();
+      assert.match(author, /Qualia Framework/);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 
   it("pre-push.js exits 0 with no tracking.json", () => {
