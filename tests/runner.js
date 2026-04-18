@@ -1229,6 +1229,65 @@ waves: 1
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
+
+  // ─── v4.0.2: write-ahead journal recovery ─────────────────
+  // Simulate a crashed previous mutator by dropping a .state.journal file
+  // with pre-transition snapshots of STATE.md and tracking.json. The next
+  // mutator invocation must restore both files from the journal and remove it.
+  it("recovers STATE.md + tracking.json from .state.journal on next mutator", () => {
+    const tmpDir = makeProject();
+    try {
+      const statePath = path.join(tmpDir, ".planning", "STATE.md");
+      const trackPath = path.join(tmpDir, ".planning", "tracking.json");
+      const journalPath = path.join(tmpDir, ".planning", ".state.journal");
+
+      const origState = fs.readFileSync(statePath, "utf8");
+      const origTracking = fs.readFileSync(trackPath, "utf8");
+
+      // Corrupt STATE.md and tracking.json to simulate a half-completed write.
+      fs.writeFileSync(statePath, "# CORRUPTED\n");
+      fs.writeFileSync(trackPath, '{"corrupt":true}\n');
+
+      // Drop a journal that would have been written before the corruption.
+      fs.writeFileSync(journalPath, JSON.stringify({
+        ts: new Date().toISOString(),
+        pid: 99999,
+        state: origState,
+        tracking: origTracking,
+      }));
+
+      // Any mutator should trigger recovery. Use `fix` (a cheap mutator).
+      const r = runState(["fix"], tmpDir);
+      // Not asserting r.status — fix may succeed or report nothing to fix.
+      // What matters: STATE.md and tracking.json were restored and journal is gone.
+      assert.equal(fs.existsSync(journalPath), false, "journal must be removed after recovery");
+      const recoveredState = fs.readFileSync(statePath, "utf8");
+      const recoveredTracking = fs.readFileSync(trackPath, "utf8");
+      assert.ok(recoveredState.includes("Current Position") || recoveredState === origState,
+        "STATE.md must be restored from journal");
+      assert.notStrictEqual(recoveredTracking, '{"corrupt":true}\n',
+        "tracking.json must no longer be the corrupted snapshot");
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  // ─── v4.0.2: corrupt journal is tolerated, not fatal ──────
+  it("corrupt .state.journal is cleared without crashing mutator", () => {
+    const tmpDir = makeProject();
+    try {
+      const journalPath = path.join(tmpDir, ".planning", ".state.journal");
+      fs.writeFileSync(journalPath, "{not valid json");
+      const r = runState(["check"], tmpDir);
+      // check is read-only so it won't recover; use a mutator.
+      runState(["fix"], tmpDir);
+      assert.equal(fs.existsSync(journalPath), false,
+        "corrupt journal must be cleaned up so we don't loop on recovery");
+      assert.equal(r.status, 0, "check should still work with a stray journal file");
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -1872,6 +1931,28 @@ describe("Hooks", () => {
       tool_input: { file_path: "supabase/migrations/004.sql", content: "UPDATE users SET email = NULL;" },
     });
     assert.equal(r.status, 2, "UPDATE without WHERE must block");
+  });
+
+  // v4.0.2: per-statement scan (previously a WHERE in ANY later statement
+  // made an unsafe DELETE pass).
+  it("migration-guard: DELETE FROM followed by unrelated SELECT WHERE -> blocked", () => {
+    const r = runHook("migration-guard.js", {
+      tool_input: {
+        file_path: "supabase/migrations/004b.sql",
+        content: "DELETE FROM users;\nSELECT * FROM logs WHERE ts > NOW();",
+      },
+    });
+    assert.equal(r.status, 2, "per-statement scan must still catch the DELETE without WHERE");
+  });
+
+  it("migration-guard: UPDATE SET without WHERE followed by unrelated WHERE -> blocked", () => {
+    const r = runHook("migration-guard.js", {
+      tool_input: {
+        file_path: "supabase/migrations/004c.sql",
+        content: "UPDATE accounts SET active = true;\nSELECT id FROM sessions WHERE expires > NOW();",
+      },
+    });
+    assert.equal(r.status, 2, "per-statement scan must catch the UPDATE without WHERE");
   });
 
   it("migration-guard: GRANT TO PUBLIC -> blocked", () => {
@@ -2523,6 +2604,46 @@ describe("install.js", () => {
       runInstall("QS-FAWZI-01", tmpHome);
       const content = fs.readFileSync(path.join(tmpHome, ".claude", "knowledge", "learned-patterns.md"), "utf8");
       assert.match(content, /CUSTOM LEARNING/);
+    } finally {
+      fs.rmSync(tmpHome, { recursive: true, force: true });
+    }
+  });
+
+  // v4.0.2: reinstall merges hooks instead of clobbering.
+  it("re-install preserves user-added hooks in settings.json", () => {
+    const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "qualia-install-"));
+    try {
+      // Fresh install first, then inject a user-owned hook, then reinstall.
+      runInstall("QS-FAWZI-01", tmpHome);
+      const settingsPath = path.join(tmpHome, ".claude", "settings.json");
+      const before = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+
+      // Add a user hook to PreToolUse that is not a Qualia command.
+      const userHook = {
+        matcher: "Bash",
+        hooks: [
+          { type: "command", command: "echo user-owned-pre-tool-hook", timeout: 3 },
+        ],
+      };
+      before.hooks.PreToolUse = [userHook, ...(before.hooks.PreToolUse || [])];
+      fs.writeFileSync(settingsPath, JSON.stringify(before, null, 2));
+
+      const r = runInstall("QS-FAWZI-01", tmpHome);
+      assert.equal(r.status, 0);
+      const after = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+      const allCmds = [];
+      for (const block of after.hooks.PreToolUse || []) {
+        for (const h of (block.hooks || [])) allCmds.push(String(h.command || ""));
+      }
+      assert.ok(
+        allCmds.some((c) => c.includes("user-owned-pre-tool-hook")),
+        `user hook was clobbered by reinstall. Commands: ${allCmds.join(" | ")}`
+      );
+      // And Qualia hooks should still be there.
+      assert.ok(
+        allCmds.some((c) => c.includes("branch-guard.js")),
+        "Qualia hooks must still be present after reinstall"
+      );
     } finally {
       fs.rmSync(tmpHome, { recursive: true, force: true });
     }

@@ -8,6 +8,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Note: git tags for historical versions were not retained; commit references are approximate
 > and dates reflect commit history rather than npm publish timestamps.
 
+## [4.0.2] — 2026-04-18
+
+**Stability pass.** Closes every remaining HIGH + MEDIUM item from the
+v4.0.0 audit that could surface as a silent failure or instability.
+Tests: 159 → 164 (+5 regression tests).
+
+### Fixed — HIGH
+
+- `hooks/session-start.js`: `readConfig()` now defined above its call
+  site. Previously worked by function-declaration hoisting — would have
+  silently broken on any refactor to `const readConfig = …`.
+- `bin/state.js`: write-ahead journal (`.planning/.state.journal`)
+  captures the pre-transition snapshot of STATE.md + tracking.json
+  before the dual write. On next mutator invocation, if the journal
+  exists we recover both files to the pre-transition state. A crashed
+  mutator (SIGKILL / power loss between the two renames) no longer
+  leaves the pair inconsistent. A corrupt journal is cleared, not fatal.
+
+### Fixed — MEDIUM
+
+- `hooks/migration-guard.js`: DELETE / UPDATE `WHERE` scan is now
+  per-statement (split on `;`) instead of file-global. A file
+  containing `DELETE FROM foo;` followed by any later `… WHERE …`
+  (in a SELECT, JOIN, etc.) would previously pass the check.
+- `hooks/migration-guard.js`: stdin read retry loop now sleeps 1ms
+  between EAGAIN retries via `Atomics.wait` instead of spinning CPU.
+- `hooks/pre-push.js`: commit-failure path now unstages tracking.json
+  and restores the working-tree copy, so the user's next manual commit
+  isn't polluted by an aborted ERP-stamp change.
+- `bin/cli.js` — `cleanSettingsJson`: iterates ALL hook-event keys in
+  settings.json instead of the hardcoded three (SessionStart /
+  PreToolUse / PreCompact). Future hook events get cleaned automatically.
+- `bin/cli.js` — hook cleanup: introduce `QUALIA_LEGACY_HOOK_FILES`
+  for removed-in-past-version hook filenames (currently
+  `block-env-edit.js`). Uninstall cleans legacy hooks too.
+- `bin/statusline.js`: memory-path `dirKey` now strips BOTH `/` and `\`
+  so Windows installs get a correct project key and the memory count
+  actually renders.
+
+### Tests
+
+- +5 regression tests:
+  · state.js recovers STATE.md + tracking.json from `.state.journal`
+  · state.js: corrupt `.state.journal` is cleared without crashing
+  · migration-guard: `DELETE FROM x; SELECT … WHERE …;` still blocks
+  · migration-guard: `UPDATE … SET …; SELECT … WHERE …;` still blocks
+  · install.js: reinstall preserves user-added hooks in settings.json
+
 ## [4.0.1] — 2026-04-18
 
 **Post-v4.0.0 audit cleanup.** No behavior changes on the happy path —
@@ -1050,7 +1098,8 @@ and install codes.
 - Core skills, agents, hooks, rules, and templates.
 - `bin/install.js` and `bin/cli.js` installer / CLI.
 
-[Unreleased]: https://github.com/Qualiasolutions/qualia-framework/compare/v4.0.1...HEAD
+[Unreleased]: https://github.com/Qualiasolutions/qualia-framework/compare/v4.0.2...HEAD
+[4.0.2]: https://github.com/Qualiasolutions/qualia-framework/compare/v4.0.1...v4.0.2
 [4.0.1]: https://github.com/Qualiasolutions/qualia-framework/compare/v4.0.0...v4.0.1
 [4.0.0]: https://github.com/Qualiasolutions/qualia-framework/compare/v3.7.0...v4.0.0
 [3.7.0]: https://github.com/Qualiasolutions/qualia-framework/compare/v3.6.0...v3.7.0

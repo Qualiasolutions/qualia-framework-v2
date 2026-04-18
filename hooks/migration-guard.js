@@ -11,6 +11,10 @@ const _traceStart = Date.now();
 // Read JSON tool input from stdin with a safety timeout.
 // On Windows, fs.readFileSync(0) can hang if stdin isn't closed by the host.
 // We loop fs.readSync with a 1s deadline; if no data arrives, treat as empty.
+// Between EAGAIN retries we sleep via Atomics.wait to avoid CPU-burning spin.
+function sleepSync(ms) {
+  try { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); } catch {}
+}
 function readInput() {
   const deadline = Date.now() + 1000;
   const buf = Buffer.alloc(65536);
@@ -21,8 +25,8 @@ function readInput() {
       try {
         n = fs.readSync(0, buf, 0, buf.length, null);
       } catch (e) {
-        // EAGAIN/EWOULDBLOCK: no data yet, retry until deadline
-        if (e && (e.code === "EAGAIN" || e.code === "EWOULDBLOCK")) continue;
+        // EAGAIN/EWOULDBLOCK: no data yet. Sleep 1ms and retry until deadline.
+        if (e && (e.code === "EAGAIN" || e.code === "EWOULDBLOCK")) { sleepSync(1); continue; }
         // Any other read error: bail
         break;
       }
@@ -108,14 +112,24 @@ if (/ALTER\s+TABLE\s+[^;]*\bDROP\s+COLUMN\b/i.test(scan)) {
   errors.push("ALTER TABLE ... DROP COLUMN is destructive");
 }
 
-// DELETE without WHERE
-if (/DELETE\s+FROM/i.test(scan) && !/WHERE/i.test(scan)) {
-  errors.push("DELETE FROM without WHERE clause");
+// DELETE / UPDATE without WHERE — check per-statement, not file-global.
+// Previously a file containing "DELETE FROM foo;" followed by any later
+// "... WHERE ..." (in a SELECT, JOIN, etc.) would pass the check.
+function splitStatements(src) {
+  return src.split(/;/g).map((s) => s.trim()).filter(Boolean);
 }
-
-// UPDATE without WHERE — affects every row
-if (/\bUPDATE\s+\w+(?:\.\w+)?\s+SET\b/i.test(scan) && !/WHERE/i.test(scan)) {
-  errors.push("UPDATE without WHERE clause — affects every row");
+const statements = splitStatements(scan);
+for (const stmt of statements) {
+  if (/^\s*DELETE\s+FROM\b/i.test(stmt) && !/\bWHERE\b/i.test(stmt)) {
+    errors.push("DELETE FROM without WHERE clause");
+    break;
+  }
+}
+for (const stmt of statements) {
+  if (/^\s*UPDATE\s+\w+(?:\.\w+)?\s+SET\b/i.test(stmt) && !/\bWHERE\b/i.test(stmt)) {
+    errors.push("UPDATE without WHERE clause — affects every row");
+    break;
+  }
 }
 
 // TRUNCATE (almost always wrong in migrations)

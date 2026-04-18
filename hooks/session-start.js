@@ -52,6 +52,14 @@ function getNextCommand() {
   }
 }
 
+function readConfig() {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(HOME, ".claude", ".qualia-config.json"), "utf8"));
+  } catch {
+    return {};
+  }
+}
+
 function fallbackText() {
   // If qualia-ui.js is missing, emit plain text. Keeps the session informative
   // even on a broken install.
@@ -119,14 +127,6 @@ try {
   }
 } catch {
   // Deliberately silent — hook must never fail
-}
-
-function readConfig() {
-  try {
-    return JSON.parse(fs.readFileSync(path.join(HOME, ".claude", ".qualia-config.json"), "utf8"));
-  } catch {
-    return {};
-  }
 }
 
 function _trace(hookName, result, extra) {

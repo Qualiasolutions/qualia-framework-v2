@@ -175,7 +175,10 @@ try {
 // ─── Memory count ────────────────────────────────────────
 let MEMORY_COUNT = 0;
 try {
-  const dirKey = DIR.replace(/\//g, "-");
+  // Claude Code uses a hyphenated encoding of the project directory. Replace
+  // BOTH forward and backward slashes so Windows installs (where DIR contains
+  // `\`) get a correct key and the memory count renders.
+  const dirKey = DIR.replace(/[\/\\]/g, "-");
   const memDir = path.join(HOME, ".claude", "projects", dirKey, "memory");
   if (fs.existsSync(memDir)) {
     const files = fs.readdirSync(memDir).filter(f => f.endsWith(".md") && f !== "MEMORY.md");

@@ -85,9 +85,12 @@ function commitStamp() {
     "-m", `chore(track): ERP sync ${now}`,
   ]);
   if (commit.status !== 0) {
-    // If commit failed (e.g., empty diff because git's auto-CRLF normalized
-    // the only change to nothing), restore the file to keep the working tree
-    // clean and move on. Not fatal.
+    // Commit failed (e.g., empty diff because git's auto-CRLF normalized the
+    // only change to nothing, or branch is in a detached/conflicted state).
+    // Unstage tracking.json and restore the working tree copy so the user's
+    // next manual commit isn't polluted by our aborted stamp.
+    try { git(["reset", "HEAD", "--", TRACKING]); } catch {}
+    try { if (raw != null) atomicWrite(TRACKING, raw); } catch {}
     return { skipped: "git-commit-failed", error: (commit.stderr || commit.stdout || "").trim() };
   }
   return { committed: true, sha: lastCommit, ts: now };

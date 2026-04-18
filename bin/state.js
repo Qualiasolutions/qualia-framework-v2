@@ -9,6 +9,7 @@ const PLANNING = ".planning";
 const STATE_FILE = path.join(PLANNING, "STATE.md");
 const TRACKING_FILE = path.join(PLANNING, "tracking.json");
 const LOCK_FILE = path.join(PLANNING, ".state.lock");
+const JOURNAL_FILE = path.join(PLANNING, ".state.journal");
 
 // ─── Atomic write (tmp + rename) ─────────────────────────
 // Prevents half-written files when SIGINT, OOM, or AV scanners
@@ -23,6 +24,42 @@ function atomicWrite(file, content) {
     // Cleanup tmp on failure (Windows EBUSY, EPERM, etc.)
     try { fs.unlinkSync(tmp); } catch {}
     throw err;
+  }
+}
+
+// ─── Write-ahead journal (two-file crash recovery) ──────
+// STATE.md + tracking.json are written back-to-back. A SIGKILL or power
+// loss between the two renames can leave the pair inconsistent. The
+// journal captures the pre-write snapshot; if a journal is still present
+// on next startup, we know the previous mutator crashed mid-write and
+// restore both files to the pre-transaction state.
+function writeJournal(preState, preTracking) {
+  if (!fs.existsSync(PLANNING)) return;
+  const payload = JSON.stringify({
+    ts: new Date().toISOString(),
+    pid: process.pid,
+    state: preState != null ? preState : null,
+    tracking: preTracking != null ? preTracking : null,
+  });
+  atomicWrite(JOURNAL_FILE, payload);
+}
+function clearJournal() {
+  try { fs.unlinkSync(JOURNAL_FILE); } catch {}
+}
+function recoverFromJournal() {
+  if (!fs.existsSync(JOURNAL_FILE)) return false;
+  try {
+    const raw = fs.readFileSync(JOURNAL_FILE, "utf8");
+    const j = JSON.parse(raw);
+    if (j.state != null) atomicWrite(STATE_FILE, j.state);
+    if (j.tracking != null) atomicWrite(TRACKING_FILE, j.tracking);
+    clearJournal();
+    try { _trace("state-journal", "recover", { from_pid: j.pid, journal_ts: j.ts }); } catch {}
+    return true;
+  } catch {
+    // Corrupt journal — best effort: remove so we don't loop on recovery.
+    clearJournal();
+    return false;
   }
 }
 
@@ -628,21 +665,25 @@ function cmdTransition(opts) {
     t.deploy_count = (parseInt(t.deploy_count) || 0) + 1;
   }
 
-  // Write both files. We back up STATE.md AND tracking.json so a failure in
-  // the second write can still roll back cleanly. The writes themselves stage
-  // to .tmp and rename (see atomicWrite) so each individual file is torn-write
-  // safe; the rename window between the two is narrow but non-zero.
+  // Write both files. We write a journal snapshot of the pre-transition
+  // STATE.md + tracking.json first; if the process dies between the two
+  // real writes, the next invocation will see the journal and restore both
+  // files to the pre-transition state. Each individual write is torn-write
+  // safe (tmp + rename); the journal closes the gap between the two.
   const backupState = readState();
   const backupTracking = (() => {
     try { return fs.readFileSync(TRACKING_FILE, "utf8"); } catch { return null; }
   })();
   try {
+    writeJournal(backupState, backupTracking);
     writeStateMd(s);
     writeTracking(t);
+    clearJournal();
   } catch (e) {
     // Revert whichever file is out of sync with pre-transition state.
     try { if (backupState) atomicWrite(STATE_FILE, backupState); } catch {}
     try { if (backupTracking) atomicWrite(TRACKING_FILE, backupTracking); } catch {}
+    clearJournal();
     return output(fail("WRITE_ERROR", e.message));
   }
 
@@ -1215,6 +1256,10 @@ const opts = parseArgs(rest);
 const READ_ONLY = new Set(["check", "validate-plan"]);
 let __lock = null;
 if (!READ_ONLY.has(cmd)) {
+  // Before acquiring the lock, recover from any journal left by a crashed
+  // previous mutator. Runs for mutators only; read commands should still
+  // return the actual on-disk state even if it's mid-recovery.
+  try { recoverFromJournal(); } catch {}
   __lock = acquireLock();
   process.on("exit", () => releaseLock(__lock));
   process.on("SIGINT", () => { releaseLock(__lock); process.exit(130); });

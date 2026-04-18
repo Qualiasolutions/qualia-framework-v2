@@ -126,17 +126,22 @@ function cmdUpdate() {
 // non-Qualia entries in settings.json (other hooks, user env vars, etc.).
 // --yes / -y skips the confirmation prompt for scripted use.
 
-// 8 Qualia hook filenames — only these are removed from ~/.claude/hooks/,
-// any other hooks the user dropped in there are left alone.
+// Current Qualia hook filenames — only these are removed from ~/.claude/hooks/,
+// any other hooks the user dropped in there are left alone. The LEGACY set
+// lists hooks that were shipped by older framework versions but have since
+// been removed; uninstall still tries to clean them so old installs get a
+// clean removal.
 const QUALIA_HOOK_FILES = [
   "session-start.js",
   "auto-update.js",
   "branch-guard.js",
   "pre-push.js",
-  "block-env-edit.js",
   "migration-guard.js",
   "pre-deploy-gate.js",
   "pre-compact.js",
+];
+const QUALIA_LEGACY_HOOK_FILES = [
+  "block-env-edit.js", // removed in v3.2.0
 ];
 
 // 4 Qualia agents — only these are removed.
@@ -210,14 +215,14 @@ function cleanSettingsJson(counters) {
   };
 
   if (settings.hooks && typeof settings.hooks === "object") {
-    for (const key of ["SessionStart", "PreToolUse", "PreCompact"]) {
-      if (settings.hooks[key]) {
-        const cleaned = filterHookArray(settings.hooks[key]);
-        if (cleaned && cleaned.length > 0) {
-          settings.hooks[key] = cleaned;
-        } else {
-          delete settings.hooks[key];
-        }
+    // Iterate every hook event key, not a hardcoded subset — future hook
+    // events added by Claude Code or the framework get cleaned automatically.
+    for (const key of Object.keys(settings.hooks)) {
+      const cleaned = filterHookArray(settings.hooks[key]);
+      if (cleaned && cleaned.length > 0) {
+        settings.hooks[key] = cleaned;
+      } else {
+        delete settings.hooks[key];
       }
     }
     // If hooks is now empty, remove it entirely.
@@ -305,8 +310,8 @@ async function cmdUninstall() {
     safeUnlink(path.join(CLAUDE_DIR, "agents", f), counters);
   }
 
-  // Hooks — only the 8 Qualia ones.
-  for (const f of QUALIA_HOOK_FILES) {
+  // Hooks — current set plus any legacy hook filenames from older versions.
+  for (const f of [...QUALIA_HOOK_FILES, ...QUALIA_LEGACY_HOOK_FILES]) {
     safeUnlink(path.join(CLAUDE_DIR, "hooks", f), counters);
   }
 
