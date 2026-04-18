@@ -1045,12 +1045,23 @@ function cmdCloseMilestone(opts) {
     const st = (p.status || "").toLowerCase();
     return st === "verified" || st === "polished" || st === "completed" || st === "complete";
   }).length;
+  // tasks_completed for THIS milestone = lifetime.tasks_completed minus the
+  // sum of tasks already counted in prior milestones[] entries. This gives
+  // the correct per-milestone count even though `t.tasks_done` only reflects
+  // the current phase, not the cumulative milestone total.
+  const priorMilestoneTasks = Array.isArray(t.milestones)
+    ? t.milestones.reduce((sum, m) => sum + (parseInt(m && m.tasks_completed) || 0), 0)
+    : 0;
+  const tasksCompletedThisMilestone = Math.max(
+    0,
+    (parseInt(t.lifetime && t.lifetime.tasks_completed) || 0) - priorMilestoneTasks
+  );
   const summary = {
     num: closedMilestone,
     name: t.milestone_name || `Milestone ${closedMilestone}`,
     total_phases: parseInt(t.total_phases) || s.phases.length || 0,
     phases_completed: phasesCompleted,
-    tasks_completed: parseInt(t.tasks_done) || 0,
+    tasks_completed: tasksCompletedThisMilestone,
     shipped_url: t.deployed_url || "",
     closed_at: new Date().toISOString(),
   };

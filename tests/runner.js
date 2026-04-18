@@ -1068,6 +1068,90 @@ waves: 1
     }
   });
 
+  it("milestone summary captures cumulative tasks_completed, not current phase only", () => {
+    const tmpDir = makeProject();
+    try {
+      // Simulate 2 phases each with 3 tasks verified pass. This bumps
+      // lifetime.tasks_completed to 6. The milestone close summary should
+      // reflect 6, not just 3 (the last phase's tasks_done).
+      for (const phase of [1, 2]) {
+        const planFile = path.join(tmpDir, ".planning", `phase-${phase}-plan.md`);
+        fs.writeFileSync(planFile, `---
+phase: ${phase}
+goal: "x"
+tasks: 1
+waves: 1
+---
+
+## Task 1 — x
+**Wave:** 1
+**Files:** x.ts
+**Depends on:** none
+**Acceptance Criteria:**
+- ok
+`);
+        const verFile = path.join(tmpDir, ".planning", `phase-${phase}-verification.md`);
+        // Plan → built → verified
+        let r = spawnSync(process.execPath, [path.join(BIN, "state.js"), "transition", "--to", "planned", "--phase", String(phase)],
+          { encoding: "utf8", cwd: tmpDir, timeout: 5000, stdio: ["pipe", "pipe", "pipe"] });
+        assert.equal(r.status, 0, `planned transition failed for phase ${phase}: ${r.stderr || r.stdout}`);
+        r = spawnSync(process.execPath, [path.join(BIN, "state.js"), "transition", "--to", "built", "--phase", String(phase), "--tasks-done", "3", "--tasks-total", "3"],
+          { encoding: "utf8", cwd: tmpDir, timeout: 5000, stdio: ["pipe", "pipe", "pipe"] });
+        assert.equal(r.status, 0, `built transition failed for phase ${phase}: ${r.stderr || r.stdout}`);
+        fs.writeFileSync(verFile, "result: PASS");
+        r = spawnSync(process.execPath, [path.join(BIN, "state.js"), "transition", "--to", "verified", "--phase", String(phase), "--verification", "pass"],
+          { encoding: "utf8", cwd: tmpDir, timeout: 5000, stdio: ["pipe", "pipe", "pipe"] });
+        assert.equal(r.status, 0, `verified transition failed for phase ${phase}: ${r.stderr || r.stdout}`);
+      }
+
+      // Close milestone
+      const r = spawnSync(process.execPath, [path.join(BIN, "state.js"), "close-milestone"],
+        { encoding: "utf8", cwd: tmpDir, timeout: 5000, stdio: ["pipe", "pipe", "pipe"] });
+      assert.equal(r.status, 0, `close-milestone failed: ${r.stderr || r.stdout}`);
+
+      const t = JSON.parse(fs.readFileSync(path.join(tmpDir, ".planning", "tracking.json"), "utf8"));
+      assert.equal(t.lifetime.tasks_completed, 6, "lifetime should have 6 tasks (2 phases × 3 tasks)");
+      assert.equal(t.milestones.length, 1);
+      assert.equal(t.milestones[0].tasks_completed, 6, "milestone summary should cumulate all 6 tasks, not just the last phase's 3");
+      assert.equal(t.milestones[0].phases_completed, 2);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("build_count bumps on each 'built' transition", () => {
+    const tmpDir = makeProject();
+    try {
+      const tFile = path.join(tmpDir, ".planning", "tracking.json");
+      const before = JSON.parse(fs.readFileSync(tFile, "utf8")).build_count || 0;
+
+      fs.writeFileSync(path.join(tmpDir, ".planning", "phase-1-plan.md"), `---
+phase: 1
+goal: "x"
+tasks: 1
+waves: 1
+---
+
+## Task 1 — x
+**Wave:** 1
+**Files:** x.ts
+**Depends on:** none
+**Acceptance Criteria:**
+- ok
+`);
+      spawnSync(process.execPath, [path.join(BIN, "state.js"), "transition", "--to", "planned", "--phase", "1"],
+        { encoding: "utf8", cwd: tmpDir, timeout: 5000, stdio: ["pipe", "pipe", "pipe"] });
+      const r = spawnSync(process.execPath, [path.join(BIN, "state.js"), "transition", "--to", "built", "--phase", "1", "--tasks-done", "1", "--tasks-total", "1"],
+        { encoding: "utf8", cwd: tmpDir, timeout: 5000, stdio: ["pipe", "pipe", "pipe"] });
+      assert.equal(r.status, 0);
+
+      const after = JSON.parse(fs.readFileSync(tFile, "utf8")).build_count || 0;
+      assert.equal(after, before + 1, "build_count should bump on 'built' transition");
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   it("check exposes milestones[] and milestone_name in output", () => {
     const tmpDir = makeProject();
     try {
