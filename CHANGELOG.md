@@ -8,6 +8,86 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Note: git tags for historical versions were not retained; commit references are approximate
 > and dates reflect commit history rather than npm publish timestamps.
 
+## [4.0.1] — 2026-04-18
+
+**Post-v4.0.0 audit cleanup.** No behavior changes on the happy path —
+all fixes patch latent bugs, silent failure modes, and documentation
+drift found in a full-framework audit. Tests grew from 156 to 159.
+
+### Fixed — ship-blockers
+
+- `bin/qualia-ui.js`: `/qualia` journey-tree no longer crashes when
+  `JOURNEY.md` lacks a `project:` frontmatter line. A `const projectName`
+  was shadowing the function name inside its own initializer, triggering
+  `ReferenceError: Cannot access 'projectName' before initialization`.
+- `templates/help.html`: version pill, subtitle, and footer now render
+  the real installed version. Previously hardcoded `v3.6.0` in three
+  places, and the `sed "s/{{VERSION}}/$VERSION/g"` in `/qualia-help`
+  had nothing to replace.
+- `skills/qualia-help/SKILL.md`: version fallback chain rewritten —
+  `.qualia-config.json` → `package.json` → `"latest"`. Previously
+  fell back to the string `"v3"`.
+- `skills/qualia-design/SKILL.md` + `rules/frontend.md`: remove references
+  to 5 non-existent design skills (`/bolder`, `/design-quieter`,
+  `/colorize`, `/distill`, `/delight`). The rules file ships to every
+  user project; the ghost commands would have 404'd.
+- `CLAUDE.md`: Road section rewritten to describe the v4 hierarchy.
+  Previously no mention of milestones, `JOURNEY.md`, `/qualia-milestone`,
+  `/qualia-idk`, or `--auto` — the file Claude reads every session was
+  still on v3 mental model.
+- `CHANGELOG.md`: add link references for v3.1.0 through v4.0.0 and
+  point `[Unreleased]` at v4.0.0. Previous version headers rendered
+  as plain text on GitHub / npm.
+
+### Fixed — real bugs
+
+- `hooks/pre-deploy-gate.js`: exits **2** (not 1) on block, matching
+  Claude Code's PreToolUse hook contract. Previous code explicitly
+  acknowledged the violation in a comment. Test assertions updated in
+  `tests/runner.js` and `tests/hooks.test.sh`.
+- `bin/state.js` — lock: replace 50ms CPU busy-wait with
+  `Atomics.wait`-backed `sleepSync` (no CPU starvation on constrained
+  CI runners). Lock fall-through now traces `state-lock/fallthrough`
+  so repeated contention is visible instead of silent.
+- `bin/state.js` — `cmdTransition`: back up BOTH `STATE.md` and
+  `tracking.json` before the dual write, so a failure in the second
+  write can roll both files back to a consistent pre-transition state.
+- `bin/install.js`: hooks are now merged into `settings.json` instead
+  of clobbered. Previous code did `settings.hooks = {...}`, silently
+  destroying any user-added hook entries on every reinstall.
+  Qualia-owned hook commands are matched by filename and replaced;
+  everything else is preserved.
+
+### Fixed — docs / drift
+
+- `agents/plan-checker.md`: Rule 2 heading "6 mandatory fields" →
+  "7 mandatory fields" (list contained 7).
+- `skills/qualia-task/SKILL.md` + `skills/qualia-plan/SKILL.md`:
+  legacy `Done when:` → `Acceptance Criteria:` (matches v3.7.0 story-file
+  format that plan-checker validates against).
+- `docs/erp-contract.md`: add v4 fields `milestone_name` and
+  `milestones[]` to the request body example and required-fields table.
+  `/qualia-report` already sent these; the contract doc didn't document
+  them.
+- `guide.md`: "The 10 Commands" → "The Road Commands" (table has 13 rows).
+- `skills/qualia-new/SKILL.md`: strip stale "Unlike v3" language.
+
+### Tests
+
+- +3 new regression tests (156 → 159):
+  · `transition --to shipped` actually increments `deploy_count`
+  · `qualia-ui journey-tree` renders milestones without crashing
+  · `qualia-ui journey-tree` falls back to `projectName()` when
+    `JOURNEY.md` frontmatter lacks `project:`
+
+### Deferred to v4.1
+
+- `allowed-tools` frontmatter sweep across 26 skills — requires
+  per-skill audit to avoid accidentally blocking tool access that
+  skills rely on.
+- Finer-grained per-statement `WHERE`-clause scan in
+  `migration-guard.js` / `pre-deploy-gate.js`.
+
 ## [4.0.0] — 2026-04-18
 
 **Full Journey release.** `/qualia-new` now maps the entire project
@@ -970,7 +1050,8 @@ and install codes.
 - Core skills, agents, hooks, rules, and templates.
 - `bin/install.js` and `bin/cli.js` installer / CLI.
 
-[Unreleased]: https://github.com/Qualiasolutions/qualia-framework/compare/v4.0.0...HEAD
+[Unreleased]: https://github.com/Qualiasolutions/qualia-framework/compare/v4.0.1...HEAD
+[4.0.1]: https://github.com/Qualiasolutions/qualia-framework/compare/v4.0.0...v4.0.1
 [4.0.0]: https://github.com/Qualiasolutions/qualia-framework/compare/v3.7.0...v4.0.0
 [3.7.0]: https://github.com/Qualiasolutions/qualia-framework/compare/v3.6.0...v3.7.0
 [3.6.0]: https://github.com/Qualiasolutions/qualia-framework/compare/v3.5.0...v3.6.0
