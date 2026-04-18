@@ -835,9 +835,11 @@ waves: 1
   it("init --force overwrites an existing project (preserves lifetime)", () => {
     const tmpDir = makeProject();
     try {
-      // Seed lifetime via close-milestone first
+      // Seed lifetime via close-milestone first. --force bypasses the v4
+      // readiness guards (MILESTONE_NOT_READY) since this test doesn't
+      // exercise the verification flow — it's focused on lifetime preservation.
       const c = spawnSync(process.execPath, [
-        path.join(BIN, "state.js"), "close-milestone",
+        path.join(BIN, "state.js"), "close-milestone", "--force",
       ], { encoding: "utf8", cwd: tmpDir, timeout: 5000, stdio: ["pipe", "pipe", "pipe"] });
       assert.equal(c.status, 0);
       const tBefore = JSON.parse(fs.readFileSync(path.join(tmpDir, ".planning", "tracking.json"), "utf8"));
@@ -863,8 +865,10 @@ waves: 1
   it("close-milestone refuses double-close (idempotency)", () => {
     const tmpDir = makeProject();
     try {
+      // First close uses --force to bypass v4 readiness guards — this test
+      // focuses on the ALREADY_CLOSED sentinel, not phase-verification gates.
       const r1 = spawnSync(process.execPath, [
-        path.join(BIN, "state.js"), "close-milestone",
+        path.join(BIN, "state.js"), "close-milestone", "--force",
       ], { encoding: "utf8", cwd: tmpDir, timeout: 5000, stdio: ["pipe", "pipe", "pipe"] });
       assert.equal(r1.status, 0);
       const out1 = JSON.parse(r1.stdout);
@@ -878,6 +882,8 @@ waves: 1
       t.milestone = out1.closed_milestone; // rewind
       fs.writeFileSync(tFile, JSON.stringify(t, null, 2) + "\n");
 
+      // Second close (without --force) must fail with ALREADY_CLOSED, which
+      // is checked BEFORE the readiness guards in cmdCloseMilestone.
       const r2 = spawnSync(process.execPath, [
         path.join(BIN, "state.js"), "close-milestone",
       ], { encoding: "utf8", cwd: tmpDir, timeout: 5000, stdio: ["pipe", "pipe", "pipe"] });
@@ -893,7 +899,7 @@ waves: 1
     const tmpDir = makeProject();
     try {
       const r1 = spawnSync(process.execPath, [
-        path.join(BIN, "state.js"), "close-milestone",
+        path.join(BIN, "state.js"), "close-milestone", "--force",
       ], { encoding: "utf8", cwd: tmpDir, timeout: 5000, stdio: ["pipe", "pipe", "pipe"] });
       assert.equal(r1.status, 0);
 
@@ -997,6 +1003,81 @@ waves: 1
       assert.equal(tAfter.lifetime.total_phases, 0);
       assert.equal(tAfter.lifetime.last_closed_milestone, 0);
       assert.ok(!Number.isNaN(tAfter.lifetime.phases_completed));
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  // ─── v4.0.0: milestone readiness guards + milestones[] summary ─
+  it("close-milestone refuses unverified phases (MILESTONE_NOT_READY)", () => {
+    const tmpDir = makeProject();
+    try {
+      // No phases verified yet — close-milestone (without --force) must refuse.
+      const r = spawnSync(process.execPath, [
+        path.join(BIN, "state.js"), "close-milestone",
+      ], { encoding: "utf8", cwd: tmpDir, timeout: 5000, stdio: ["pipe", "pipe", "pipe"] });
+      assert.equal(r.status, 1);
+      const out = JSON.parse(r.stdout);
+      assert.equal(out.error, "MILESTONE_NOT_READY");
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("close-milestone refuses single-phase milestones (MILESTONE_TOO_SMALL)", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "qualia-single-"));
+    try {
+      const init = spawnSync(process.execPath, [
+        path.join(BIN, "state.js"), "init",
+        "--project", "SingleProject",
+        "--phases", '[{"name":"Only","goal":"Y"}]',
+      ], { encoding: "utf8", cwd: tmpDir, timeout: 5000, stdio: ["pipe", "pipe", "pipe"] });
+      assert.equal(init.status, 0);
+
+      // Single-phase milestone — even if the phase were verified, the size
+      // guard catches it first. A milestone needs ≥ 2 phases without --force.
+      const r = spawnSync(process.execPath, [
+        path.join(BIN, "state.js"), "close-milestone",
+      ], { encoding: "utf8", cwd: tmpDir, timeout: 5000, stdio: ["pipe", "pipe", "pipe"] });
+      assert.equal(r.status, 1);
+      const out = JSON.parse(r.stdout);
+      assert.equal(out.error, "MILESTONE_TOO_SMALL");
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("close-milestone appends a summary to milestones[]", () => {
+    const tmpDir = makeProject();
+    try {
+      const r = spawnSync(process.execPath, [
+        path.join(BIN, "state.js"), "close-milestone", "--force",
+      ], { encoding: "utf8", cwd: tmpDir, timeout: 5000, stdio: ["pipe", "pipe", "pipe"] });
+      assert.equal(r.status, 0);
+
+      const tFile = path.join(tmpDir, ".planning", "tracking.json");
+      const t = JSON.parse(fs.readFileSync(tFile, "utf8"));
+      assert.ok(Array.isArray(t.milestones), "milestones[] must exist");
+      assert.equal(t.milestones.length, 1);
+      const m1 = t.milestones[0];
+      assert.equal(m1.num, 1);
+      assert.ok(m1.total_phases >= 2, "total_phases should reflect seeded phases");
+      assert.ok(typeof m1.closed_at === "string" && m1.closed_at.length > 0);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("check exposes milestones[] and milestone_name in output", () => {
+    const tmpDir = makeProject();
+    try {
+      const r = spawnSync(process.execPath, [
+        path.join(BIN, "state.js"), "check",
+      ], { encoding: "utf8", cwd: tmpDir, timeout: 5000, stdio: ["pipe", "pipe", "pipe"] });
+      assert.equal(r.status, 0);
+      const out = JSON.parse(r.stdout);
+      assert.ok(Array.isArray(out.milestones), "check must expose milestones[]");
+      assert.ok(typeof out.milestone_name === "string", "check must expose milestone_name");
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }

@@ -140,6 +140,8 @@ function writeTracking(t) {
 function ensureLifetime(t) {
   if (!t) return t;
   if (typeof t.milestone !== "number") t.milestone = 1;
+  if (typeof t.milestone_name !== "string") t.milestone_name = "";
+  if (!Array.isArray(t.milestones)) t.milestones = [];
   if (!t.lifetime || typeof t.lifetime !== "object") {
     t.lifetime = {
       tasks_completed: 0,
@@ -440,6 +442,8 @@ function cmdCheck(opts) {
     status: s.status,
     assigned_to: s.assigned_to,
     milestone: t.milestone || 1,
+    milestone_name: t.milestone_name || "",
+    milestones: t.milestones || [],
     lifetime: t.lifetime,
     verification: t.verification || "pending",
     gap_cycles: (t.gap_cycles || {})[String(s.phase)] || 0,
@@ -716,6 +720,9 @@ function cmdInit(opts) {
     ? { ...defaultLifetime, ...(prevLife.lifetime || {}) }
     : { ...defaultLifetime };
 
+  // Preserve milestones array across re-init (v4: milestone summaries for ERP tree).
+  const prevMilestones = (prevLife && Array.isArray(prevLife.milestones)) ? prevLife.milestones : [];
+
   // Build tracking — current-phase fields reset, lifetime + identity preserved
   const t = {
     project: opts.project,
@@ -726,6 +733,8 @@ function cmdInit(opts) {
     project_id: opts.project_id || (prevLife ? prevLife.project_id || "" : ""),
     git_remote: opts.git_remote || (prevLife ? prevLife.git_remote || "" : ""),
     milestone: prevLife ? prevLife.milestone : 1,
+    milestone_name: opts.milestone_name || (prevLife ? prevLife.milestone_name || "" : ""),
+    milestones: prevMilestones,
     phase: 1,
     phase_name: phases[0].name,
     total_phases: totalPhases,
@@ -998,10 +1007,65 @@ function cmdCloseMilestone(opts) {
     );
   }
 
+  // ─── v4 guard rails ─────────────────────────────────────
+  // A milestone is only closable if it actually acted like one:
+  //   (a) all its phases are verified/polished/completed, AND
+  //   (b) it had ≥ 2 phases (so a 1-phase "milestone" is forced back to being a phase).
+  // Both guards are bypassable with --force for retroactive bookkeeping.
+  if (!opts.force) {
+    const totalPhases = parseInt(t.total_phases) || s.phases.length || 0;
+    if (totalPhases < 2) {
+      return output(
+        fail(
+          "MILESTONE_TOO_SMALL",
+          `Milestone ${closedMilestone} has only ${totalPhases} phase(s). A milestone needs ≥ 2 phases OR must be a shipped release gate. Use --force if this is intentional (e.g. a preview/demo milestone).`
+        )
+      );
+    }
+    const unfinished = s.phases.filter((p) => {
+      const st = (p.status || "").toLowerCase();
+      return !(st === "verified" || st === "polished" || st === "completed" || st === "complete");
+    });
+    if (unfinished.length > 0) {
+      return output(
+        fail(
+          "MILESTONE_NOT_READY",
+          `Milestone ${closedMilestone} has ${unfinished.length} unfinished phase(s): ${unfinished.map((p) => `${p.num}:${p.name}`).join(", ")}. Verify them first, or use --force.`
+        )
+      );
+    }
+  }
+
+  // ─── Append a summary to milestones[] so the ERP can render the tree ──
+  // This is the minimal metadata needed to reconstruct "milestone N of the
+  // project contained these phases" without replaying git history.
+  const phasesCompleted = s.phases.filter((p) => {
+    const st = (p.status || "").toLowerCase();
+    return st === "verified" || st === "polished" || st === "completed" || st === "complete";
+  }).length;
+  const summary = {
+    num: closedMilestone,
+    name: t.milestone_name || `Milestone ${closedMilestone}`,
+    total_phases: parseInt(t.total_phases) || s.phases.length || 0,
+    phases_completed: phasesCompleted,
+    tasks_completed: parseInt(t.tasks_done) || 0,
+    shipped_url: t.deployed_url || "",
+    closed_at: new Date().toISOString(),
+  };
+  t.milestones = Array.isArray(t.milestones) ? t.milestones : [];
+  // Idempotency: don't duplicate if the same milestone number is already logged.
+  const existing = t.milestones.findIndex((m) => m && m.num === closedMilestone);
+  if (existing >= 0) {
+    t.milestones[existing] = summary;
+  } else {
+    t.milestones.push(summary);
+  }
+
   t.lifetime.milestones_completed += 1;
   t.lifetime.total_phases += (parseInt(t.total_phases) || 0);
   t.lifetime.last_closed_milestone = closedMilestone;
   t.milestone = closedMilestone + 1;
+  t.milestone_name = ""; // cleared; /qualia-milestone reads next one from JOURNEY.md
   t.last_updated = new Date().toISOString();
 
   writeTracking(t);

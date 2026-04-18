@@ -7,6 +7,8 @@
   "project_id": "",
   "git_remote": "",
   "milestone": 1,
+  "milestone_name": "",
+  "milestones": [],
   "phase": 0,
   "phase_name": "",
   "total_phases": 0,
