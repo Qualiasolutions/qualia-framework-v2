@@ -36,9 +36,10 @@ If either fires (without `--force`), stop and show the error. The user must veri
 
 ```bash
 node ~/.claude/bin/qualia-ui.js banner milestone
+node ~/.claude/bin/qualia-ui.js journey-tree .planning/JOURNEY.md
 ```
 
-Read `.planning/JOURNEY.md` to find the next milestone's name + scope. Show:
+The journey-tree shows the user WHERE they are on the ladder before asking the close question. Read `.planning/JOURNEY.md` to find the next milestone's name + scope. Show:
 - Current milestone name + phases completed + requirements delivered
 - Next milestone name + phase sketch + why-now from JOURNEY.md
 
@@ -143,12 +144,17 @@ git commit -m "milestone: close M{N} ({current name}) → open M{N+1} ({next nam
 **Case A: this WAS the Handoff milestone closing → project is done.**
 
 ```bash
+node ~/.claude/bin/qualia-ui.js milestone-complete {N} "Handoff" ""
 node ~/.claude/bin/qualia-ui.js end "PROJECT SHIPPED" "/qualia-report"
 ```
 
 In `--auto` mode, inline-invoke `/qualia-report` and stop. No further chaining — the project is done.
 
 **Case B: a non-final milestone just closed → next milestone is open.**
+
+```bash
+node ~/.claude/bin/qualia-ui.js milestone-complete {N} "{current name}" "{next name}"
+```
 
 **In `--auto` mode**, pause here and ask (this is ONE of the two human gates in auto mode, the other being journey approval at `/qualia-new` time):
 

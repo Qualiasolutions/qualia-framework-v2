@@ -58,21 +58,43 @@ node ~/.claude/bin/qualia-ui.js wave {W} {total_waves} {tasks_in_wave}
 node ~/.claude/bin/qualia-ui.js task {task_num} "{task title}"
 ```
 
+**Pre-inline context before spawning** (saves 3-5 Read calls inside each builder subagent — GSD-style dispatch):
+
+1. Parse the task's `Context:` field to get `@file` references
+2. Read PROJECT.md
+3. Read DESIGN.md if any file in the task is `.tsx`, `.jsx`, `.css`, `.scss`
+4. Read each `@file` referenced in Context
+5. Inline all of the above into the agent prompt under `<pre-loaded-context>` so the builder starts with full context
+
 Spawn a fresh builder subagent:
 
 ```
 Agent(prompt="
 Read your role: @~/.claude/agents/builder.md
 
-Project context:
-@.planning/PROJECT.md
+<pre-loaded-context>
+# PROJECT.md
+{inlined contents of .planning/PROJECT.md}
+
+# DESIGN.md (if frontend task)
+{inlined contents of .planning/DESIGN.md}
+
+# {each @file from task.Context}
+{inlined contents}
+</pre-loaded-context>
 
 YOUR TASK:
-{paste the single task block from the plan — title, files, action, context refs, done-when}
+{paste the single task block from the plan — title, wave, persona, files, depends-on, why, acceptance-criteria, action, validation, context}
 
-Execute this task. Read all @file references before writing. Commit when done.
+All files in <pre-loaded-context> are already in your working memory — do NOT
+re-Read them. Only Read files NOT in the pre-loaded context (e.g. existing
+project code you need to modify).
+
+Execute the task. Commit when done.
 ", subagent_type="qualia-builder", description="Task {N}: {title}")
 ```
+
+**Why pre-inline:** without it, the builder's first actions are 3-5 Read tool calls to orient itself (PROJECT.md, DESIGN.md, context files). With pre-inline, the builder starts already oriented and spends its context budget on the actual task.
 
 **After each task completes:**
 - Verify the commit exists: `git log --oneline -1`

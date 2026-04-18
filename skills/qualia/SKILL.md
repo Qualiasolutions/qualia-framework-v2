@@ -56,6 +56,8 @@ Use the state.js JSON output plus gathered context:
 **Clear next step** (use the UI helper — it reads state.js itself):
 ```bash
 node ~/.claude/bin/qualia-ui.js banner router
+# If a project is loaded, show the journey position first (one-glance orientation)
+test -f .planning/JOURNEY.md && node ~/.claude/bin/qualia-ui.js journey-tree .planning/JOURNEY.md
 node ~/.claude/bin/qualia-ui.js next "{next_command from state.js}"
 ```
 

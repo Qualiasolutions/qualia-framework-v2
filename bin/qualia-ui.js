@@ -18,6 +18,8 @@
 //   end <status> [next-command]          — closing banner with optional next
 //   update <current> <latest>            — sticky framework update banner
 //   plan-summary <path/to/plan.md>       — story-file dashboard for a plan
+//   journey-tree [path/to/JOURNEY.md]    — ladder view of all milestones, current highlighted
+//   milestone-complete <num> <name> <next> — celebration banner on milestone close
 
 const fs = require("fs");
 const path = require("path");
@@ -64,6 +66,11 @@ const ACTIONS = {
   welcome:    { label: "WELCOME",          glyph: "⬢" },
   test:       { label: "TESTING",          glyph: "⊡" },
   analytics:  { label: "ANALYTICS",        glyph: "◈" },
+  milestone:  { label: "MILESTONE",        glyph: "◆" },
+  journey:    { label: "JOURNEY",          glyph: "◯" },
+  auto:       { label: "AUTO MODE",        glyph: "⚡" },
+  research:   { label: "RESEARCH",         glyph: "◱" },
+  roadmap:    { label: "ROADMAP",          glyph: "◐" },
 };
 
 // ─── State Reading ───────────────────────────────────────
@@ -260,6 +267,137 @@ function cmdEnd(status, nextCmd) {
   console.log("");
 }
 
+// ─── Journey Tree (the North Star visualization) ────────
+// Renders JOURNEY.md as an ASCII ladder with the current milestone highlighted.
+// Called after /qualia-new to show the full arc, and by /qualia (router) to
+// orient the user on "you are here".
+function cmdJourneyTree(journeyPath) {
+  const p = journeyPath || ".planning/JOURNEY.md";
+  let content = "";
+  try {
+    content = fs.readFileSync(p, "utf8");
+  } catch {
+    console.log(`  ${DIM}No JOURNEY.md at ${p}${RESET}`);
+    return;
+  }
+
+  const state = readState();
+  const currentMilestone = state && state.ok ? (state.milestone || 1) : 1;
+
+  // Parse milestone blocks: "## Milestone N · Name" or "## Milestone N · Handoff"
+  const milestoneRe = /^## Milestone (\d+)\s*·\s*(.+?)\s*(?:\[[^\]]*\])?\r?$/gm;
+  const milestones = [];
+  let m;
+  while ((m = milestoneRe.exec(content)) !== null) {
+    const num = parseInt(m[1]);
+    const name = m[2].trim();
+    // Extract the section body to pull Why-now and phases
+    const startIdx = m.index + m[0].length;
+    const nextMatch = milestoneRe.exec(content);
+    const endIdx = nextMatch ? nextMatch.index : content.length;
+    milestoneRe.lastIndex = startIdx; // rewind for next iteration
+    const body = content.slice(startIdx, endIdx);
+
+    const whyMatch = body.match(/\*\*Why now:\*\*\s*(.+?)\r?$/m);
+    const why = whyMatch ? whyMatch[1].trim() : "";
+
+    const phaseNames = [];
+    const phaseRe = /^\d+\.\s+\*\*([^*]+)\*\*/gm;
+    let pm;
+    while ((pm = phaseRe.exec(body)) !== null) {
+      phaseNames.push(pm[1].trim());
+    }
+
+    milestones.push({ num, name, why, phaseNames });
+    if (nextMatch) milestoneRe.lastIndex = nextMatch.index;
+    else break;
+  }
+
+  if (milestones.length === 0) {
+    console.log(`  ${DIM}JOURNEY.md has no milestones to render${RESET}`);
+    return;
+  }
+
+  // Project name from frontmatter if present
+  const projMatch = content.match(/^project:\s*"?(.+?)"?\s*$/m);
+  const projectName = projMatch ? projMatch[1] : projectName();
+
+  console.log("");
+  console.log(`  ${TEAL}${BOLD}◯${RESET} ${WHITE}${BOLD}JOURNEY${RESET} ${DIM}▸${RESET} ${WHITE}${projectName}${RESET}`);
+  console.log(`  ${RULE_DIM}`);
+  console.log(`  ${DIM}${milestones.length} milestones · currently at M${currentMilestone}${RESET}`);
+  console.log("");
+
+  for (let i = 0; i < milestones.length; i++) {
+    const ms = milestones[i];
+    const isCurrent = ms.num === currentMilestone;
+    const isPast = ms.num < currentMilestone;
+    const isFuture = ms.num > currentMilestone;
+    const isHandoff = /handoff/i.test(ms.name);
+
+    let marker;
+    let labelColor;
+    let connector = "│";
+
+    if (isPast) {
+      marker = `${GREEN}●${RESET}`;
+      labelColor = DIM;
+    } else if (isCurrent) {
+      marker = `${TEAL}${BOLD}◆${RESET}`;
+      labelColor = TEAL + BOLD;
+    } else {
+      marker = `${DIM2}○${RESET}`;
+      labelColor = WHITE;
+    }
+
+    const tag = isCurrent
+      ? ` ${TEAL}${BOLD}[CURRENT]${RESET}`
+      : isPast
+      ? ` ${GREEN}[shipped]${RESET}`
+      : isHandoff
+      ? ` ${DIM2}[FINAL]${RESET}`
+      : "";
+
+    console.log(`  ${marker} ${labelColor}M${ms.num} · ${ms.name}${RESET}${tag}`);
+
+    if (ms.why && (isCurrent || isFuture)) {
+      const shortWhy = ms.why.length > 80 ? ms.why.slice(0, 77) + "…" : ms.why;
+      console.log(`  ${DIM2}│${RESET}   ${DIM}${shortWhy}${RESET}`);
+    }
+
+    if (ms.phaseNames.length > 0 && (isCurrent || isHandoff)) {
+      const phaseList = ms.phaseNames.slice(0, 4).join(` ${DIM2}→${RESET} ${DIM}`);
+      console.log(`  ${DIM2}│${RESET}   ${DIM}${phaseList}${DIM}${ms.phaseNames.length > 4 ? ` +${ms.phaseNames.length - 4}` : ""}${RESET}`);
+    }
+
+    // Connector between milestones (skip after last)
+    if (i < milestones.length - 1) {
+      console.log(`  ${DIM2}│${RESET}`);
+    }
+  }
+  console.log("");
+  console.log(`  ${RULE_DIM}`);
+}
+
+// ─── Milestone Complete (celebration banner) ─────────────
+// Shown at milestone-boundary in auto mode, and by /qualia-milestone manually.
+function cmdMilestoneComplete(num, name, nextName) {
+  console.log("");
+  console.log(`  ${GREEN}${BOLD}◆${RESET} ${WHITE}${BOLD}MILESTONE ${num} SHIPPED${RESET} ${DIM}·${RESET} ${TEAL}${name || ""}${RESET}`);
+  console.log(`  ${RULE_DIM}`);
+  if (nextName) {
+    if (/handoff/i.test(nextName)) {
+      console.log(`  ${DIM}Next${RESET}      ${TEAL}${BOLD}${nextName}${RESET} ${DIM}· the final milestone${RESET}`);
+    } else {
+      console.log(`  ${DIM}Next${RESET}      ${WHITE}${nextName}${RESET}`);
+    }
+  } else {
+    console.log(`  ${GREEN}${BOLD}PROJECT COMPLETE${RESET} ${DIM}· last milestone reached${RESET}`);
+  }
+  console.log(`  ${RULE_DIM}`);
+  console.log("");
+}
+
 // ─── Plan Summary (story-file dashboard) ─────────────────
 // Renders a polished overview of a plan file: phase goal, tasks grouped by wave,
 // persona chips, dependency lines, AC count, validation count. Called by
@@ -417,9 +555,11 @@ switch (cmd) {
   case "end":      cmdEnd(rest[0], rest.slice(1).join(" ")); break;
   case "update":   cmdUpdate(rest[0], rest[1]); break;
   case "plan-summary": cmdPlanSummary(rest[0]); break;
+  case "journey-tree": cmdJourneyTree(rest[0]); break;
+  case "milestone-complete": cmdMilestoneComplete(rest[0], rest[1], rest.slice(2).join(" ")); break;
   default:
     console.error(
-      `Usage: qualia-ui.js <banner|context|divider|ok|fail|warn|info|spawn|wave|task|done|next|end|update|plan-summary> [args]`
+      `Usage: qualia-ui.js <banner|context|divider|ok|fail|warn|info|spawn|wave|task|done|next|end|update|plan-summary|journey-tree|milestone-complete> [args]`
     );
     process.exit(1);
 }

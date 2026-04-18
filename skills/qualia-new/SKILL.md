@@ -259,7 +259,15 @@ After writing, update STATE.md via:
 
 ### Step 11. Present the Journey (single view)
 
-Read the generated `JOURNEY.md`. Present the full arc as a ladder the user can approve in one glance:
+Render the branded journey ladder:
+
+```bash
+node ~/.claude/bin/qualia-ui.js journey-tree .planning/JOURNEY.md
+```
+
+This shows M1..M{N} as a vertical ladder: shipped milestones get a green dot, current gets a teal diamond with `[CURRENT]` tag, future get dim open circles. Handoff gets `[FINAL]` tag. Why-now + phase sketch render under current and final.
+
+Also narrate the one-glance summary:
 
 ```
 ## Proposed Journey
