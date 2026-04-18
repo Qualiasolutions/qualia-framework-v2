@@ -8,25 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Note: git tags for historical versions were not retained; commit references are approximate
 > and dates reflect commit history rather than npm publish timestamps.
 
-## [4.0.1] — 2026-04-18
-
-### Added
-
-- **`/qualia-idk` is now a real diagnostic skill**, not a `/qualia` alias.
-  Spawns two isolated `Explore` subagents in parallel: one scans `.planning/`
-  only, the other scans the source code only. Each produces a 250-word
-  view of its side (plan-view report + code-view report). The main skill
-  synthesizes both plus the user's stated confusion into a structured
-  "What I see / What I think is happening / What to do next" diagnosis.
-  Catches plan↔code drift that a state-only router can't see.
-
-### Changed
-
-- **`/qualia` description scoped back to mechanical state routing.**
-  Previously claimed "idk / stuck / lost / confused" triggers; those
-  interpretive shades now route to `/qualia-idk`. `/qualia` stays the
-  fast mechanical router ("what's my next command").
-
 ## [4.0.0] — 2026-04-18
 
 **Full Journey release.** `/qualia-new` now maps the entire project
@@ -102,6 +83,15 @@ Project
   (project_id, team_id, git_remote, milestone_name, milestones[],
   build_count, deploy_count, session_started_at, last_pushed_at) so
   the ERP renders tree and dedupes correctly.
+- **`/qualia-idk` is now a real diagnostic skill**, not a `/qualia` alias.
+  When the user's confusion is about *understanding the situation*
+  (not picking the next command), it spawns two parallel isolated
+  `Explore` subagents: one scans `.planning/` only, the other scans
+  source code only. Each produces a 250-word view of its side. The
+  main skill synthesizes both views + the user's stated confusion
+  into a structured "What I see / What I think is happening / What
+  to do next" diagnosis in plain language. Catches plan↔code drift
+  that a state-only router can't see.
 
 ### Changed
 
@@ -121,6 +111,10 @@ Project
 - **`plan-checker` Rule 2** — task story-file fields are mandatory
   (Why / Depends on / Acceptance Criteria / Validation). Inherited
   from v3.7.0's story-file format.
+- **`/qualia` description scoped back to mechanical state routing.**
+  Previously claimed "idk / stuck / lost / confused" triggers; those
+  interpretive shades now route to `/qualia-idk`. `/qualia` stays the
+  fast mechanical router ("what's my next command").
 - **`templates/requirements.md`** — multi-milestone format with fixed
   Handoff section.
 - **`templates/roadmap.md`** — scoped to current milestone only, with
