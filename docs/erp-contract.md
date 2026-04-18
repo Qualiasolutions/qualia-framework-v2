@@ -39,6 +39,16 @@ Content-Type: application/json
   "git_remote": "github.com/QualiasolutionsCY/acme-portal",
   "client": "Client Name",
   "milestone": 2,
+  "milestone_name": "Core Product",
+  "milestones": [
+    {
+      "num": 1,
+      "name": "Foundation",
+      "closed_at": "2026-04-10T18:00:00Z",
+      "phases_completed": 3,
+      "tasks_completed": 12
+    }
+  ],
   "phase": 2,
   "phase_name": "Authentication & Dashboard",
   "total_phases": 4,
@@ -175,6 +185,8 @@ Authorization: Bearer <api-key>
 | submitted_by | string | yes | Team member name |
 | submitted_at | string | yes | ISO 8601 timestamp |
 | milestone | number | recommended | Current milestone number (1-indexed) |
+| milestone_name | string | recommended (v4+) | Human name of the current milestone — from JOURNEY.md / tracking.json |
+| milestones | array | recommended (v4+) | Array of closed milestone summaries: `{num, name, closed_at, phases_completed, tasks_completed}`. Renders the journey tree on the ERP. |
 | lifetime | object | recommended | Cumulative counters — tasks_completed, phases_completed, milestones_completed, total_phases, last_closed_milestone |
 | project_id | string | recommended (v3.6+) | Stable per-project identifier — preferred dedupe key over `project` slug. Survives directory renames. |
 | team_id | string | recommended (v3.6+) | Installation's team identifier. Composite `(team_id, project_id)` is the canonical project key. |

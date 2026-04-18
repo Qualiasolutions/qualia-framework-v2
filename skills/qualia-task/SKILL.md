@@ -61,7 +61,7 @@ Agent(subagent_type: "qualia-builder")
 
 Task: {task description}
 Files: {files to create/modify}
-Done when: {completion criteria}
+Acceptance Criteria: {observable completion criteria, 1-3 bullet points}
 
 Context: Read PROJECT.md if it exists. Follow all rules (security, frontend, deployment).
 ```

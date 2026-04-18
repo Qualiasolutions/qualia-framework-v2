@@ -43,7 +43,7 @@ Append `--auto` to `/qualia-new` and the framework chains every step:
 
 **Plus one halt case:** if a phase fails verification beyond the gap-cycle limit (default 2), the chain stops and asks for human intervention.
 
-## The 10 Commands
+## The Road Commands
 
 | When | Command | What it does |
 |------|---------|-------------|

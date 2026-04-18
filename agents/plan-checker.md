@@ -34,7 +34,7 @@ Plan must have YAML frontmatter with:
 
 **FAIL if:** frontmatter missing, incomplete, or `goal` differs from ROADMAP.md.
 
-### Rule 2: Every task has the 6 mandatory story-file fields
+### Rule 2: Every task has the 7 mandatory story-file fields
 
 Each `## Task N — title` block must include ALL of these:
 

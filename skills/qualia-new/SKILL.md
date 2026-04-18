@@ -204,7 +204,7 @@ Display top 3 from SUMMARY.md (stack recommendation, table stakes, top pitfall).
 
 ### Step 9. Feature Scoping (Multi-Milestone)
 
-Read `.planning/research/FEATURES.md` and present the feature landscape. Unlike v3, features are scoped **to milestones**, not just to v1/v2.
+Read `.planning/research/FEATURES.md` and present the feature landscape. Features are scoped **to milestones** — you'll decide per-feature which milestone owns it.
 
 For each category, use AskUserQuestion:
 

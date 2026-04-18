@@ -196,7 +196,7 @@ When invoked as `/qualia-plan {N} --gaps`, the planner is in gap-closure mode:
 2. For each FAIL item, create a targeted fix task:
    - **Files:** specific files that failed verification
    - **Action:** specific fix (not "fix auth" — "add session persistence check in src/lib/auth.ts signIn function")
-   - **Done when:** the exact verification criterion that previously failed, restated
+   - **Acceptance Criteria:** the exact verification criterion that previously failed, restated as an observable behavior
 3. Do NOT re-plan passing items. Do NOT add new features. Gap plans are surgical.
 4. Write to `.planning/phase-{N}-gaps-plan.md` (separate from original plan)
 5. All gap tasks are Wave 1 (parallel) unless they share files
