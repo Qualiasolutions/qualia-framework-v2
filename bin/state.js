@@ -558,6 +558,7 @@ function cmdTransition(opts) {
     t.tasks_done = parseInt(opts.tasks_done) || 0;
     t.tasks_total = parseInt(opts.tasks_total) || 0;
     t.wave = parseInt(opts.wave) || 0;
+    t.build_count = (parseInt(t.build_count) || 0) + 1;
     s.last_activity = `Phase ${phase} built (${t.tasks_done}/${t.tasks_total} tasks)`;
     if (s.phases[phase - 1]) s.phases[phase - 1].status = "built";
   }
@@ -609,6 +610,7 @@ function cmdTransition(opts) {
 
   if (target === "shipped") {
     t.deployed_url = opts.deployed_url || "";
+    t.deploy_count = (parseInt(t.deploy_count) || 0) + 1;
   }
 
   // Write both files

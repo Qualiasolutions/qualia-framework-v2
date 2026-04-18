@@ -92,6 +92,9 @@ SUBMITTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 # Only upload if ERP is enabled
 if [ "$ERP_ENABLED" = "true" ]; then
   # Build structured JSON payload from tracking.json (matches ERP contract /api/v1/reports)
+  # v4: include milestone_name, milestones[], team_id, project_id, git_remote,
+  # session_started_at, last_pushed_at, build_count, deploy_count — the ERP
+  # uses these to render the project tree (milestone → phases → unphased) correctly.
   PAYLOAD=$(node -e "
     const fs = require('fs');
     const t = JSON.parse(fs.readFileSync('.planning/tracking.json', 'utf8'));
@@ -104,8 +107,13 @@ if [ "$ERP_ENABLED" = "true" ]; then
     } catch {}
     console.log(JSON.stringify({
       project: t.project || require('path').basename(process.cwd()),
+      project_id: t.project_id || '',
+      team_id: t.team_id || '',
+      git_remote: t.git_remote || '',
       client: t.client || '',
       milestone: t.milestone || 1,
+      milestone_name: t.milestone_name || '',
+      milestones: Array.isArray(t.milestones) ? t.milestones : [],
       phase: t.phase,
       phase_name: t.phase_name,
       total_phases: t.total_phases,
@@ -114,7 +122,11 @@ if [ "$ERP_ENABLED" = "true" ]; then
       tasks_total: t.tasks_total || 0,
       verification: t.verification || 'pending',
       gap_cycles: (t.gap_cycles || {})[String(t.phase)] || 0,
+      build_count: t.build_count || 0,
+      deploy_count: t.deploy_count || 0,
       deployed_url: t.deployed_url || '',
+      session_started_at: t.session_started_at || '',
+      last_pushed_at: t.last_pushed_at || '',
       lifetime: t.lifetime || {},
       commits: commits,
       notes: notes,
