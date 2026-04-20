@@ -57,7 +57,9 @@ git ls-files | grep -i "\.env" | grep -v "\.example\|\.template\|\.sample"
 
 # HIGH: API routes without auth
 for f in $(find app/api -name "route.ts" -o -name "route.js" 2>/dev/null); do
-  grep -qL "getUser\|getSession\|auth()\|createClient" "$f" && echo "UNPROTECTED: $f"
+  if ! grep -q "getUser\|getSession\|auth()\|createClient" "$f" 2>/dev/null; then
+    echo "UNPROTECTED: $f"
+  fi
 done
 
 # HIGH: API routes without input validation
@@ -144,12 +146,20 @@ Write to `.planning/REVIEW.md`:
 {PASS: no critical/high | FAIL: N blockers — fix before /qualia-ship}
 ```
 
-**Scoring:**
-- 5 = zero high/critical, fewer than 3 medium
-- 4 = zero critical, 1 high or fewer than 5 medium
-- 3 = zero critical, 2-3 high
-- 2 = 1 critical or 4+ high
-- 1 = multiple critical
+**Scoring (deterministic — see `rules/grounding.md` for full rubric):**
+```
+weighted_sum   = (critical × 8) + (high × 4) + (medium × 2) + (low × 1)
+category_score = max(1, 5 − floor(weighted_sum / 8))
+```
+Same inputs always produce the same score. No subjective thresholds.
+
+Quick reference:
+- 0 findings → 5
+- 1–2 medium or 1 high → 5
+- 2 high OR 1 critical → 4
+- 1 critical + 2 high OR 3 high → 3
+- 2 critical → 2
+- 3+ critical → 1
 
 ```bash
 node ~/.claude/bin/qualia-ui.js divider

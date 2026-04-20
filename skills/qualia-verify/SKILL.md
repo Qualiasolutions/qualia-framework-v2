@@ -41,6 +41,10 @@ node ~/.claude/bin/qualia-ui.js spawn verifier "Goal-backward check..."
 ```
 Agent(prompt="
 Read your role: @~/.claude/agents/verifier.md
+Grounding + rubrics: @~/.claude/rules/grounding.md
+
+Project conventions (MUST consult before scoring Quality):
+@.planning/PROJECT.md
 
 Phase plan with success criteria AND verification contracts:
 @.planning/phase-{N}-plan.md
@@ -48,7 +52,7 @@ Phase plan with success criteria AND verification contracts:
 {If re-verification: Previous verification with gaps:}
 {@.planning/phase-{N}-verification.md}
 
-Verify this phase. Write report to .planning/phase-{N}-verification.md
+Verify this phase. Apply the Grounding Protocol — every finding needs file:line evidence. Use the Severity Rubric for all severity labels. Write report to .planning/phase-{N}-verification.md
 ", subagent_type="qualia-verifier", description="Verify phase {N}")
 ```
 

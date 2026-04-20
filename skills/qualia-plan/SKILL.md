@@ -73,6 +73,7 @@ Spawn the planner:
 ```
 Agent(prompt="
 Read your role: @~/.claude/agents/planner.md
+Grounding + rubrics: @~/.claude/rules/grounding.md
 
 <project_context>
 @.planning/PROJECT.md
@@ -116,6 +117,7 @@ Read the generated plan. Spawn the plan-checker:
 ```
 Agent(prompt="
 Read your role: @~/.claude/agents/plan-checker.md
+Grounding + rubrics: @~/.claude/rules/grounding.md
 
 <plan_path>.planning/phase-{N}-plan.md</plan_path>
 <phase_goal>{goal from ROADMAP.md}</phase_goal>

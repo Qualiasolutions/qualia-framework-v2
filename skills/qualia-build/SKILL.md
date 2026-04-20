@@ -62,7 +62,7 @@ node ~/.claude/bin/qualia-ui.js banner build {N} "{phase name}"
 node ~/.claude/bin/qualia-ui.js wave {W} {total_waves} {tasks_in_wave}
 ```
 
-**For each task in the wave (parallel if multiple):**
+**For each task in the wave — spawn ALL tasks in this wave as separate `Agent()` calls in the SAME response turn so the harness executes them concurrently. Do NOT await one task before spawning the next. Sequential spawning defeats wave parallelism.**
 
 ```bash
 node ~/.claude/bin/qualia-ui.js task {task_num} "{task title}"
@@ -81,6 +81,7 @@ Spawn a fresh builder subagent:
 ```
 Agent(prompt="
 Read your role: @~/.claude/agents/builder.md
+Grounding + rubrics: @~/.claude/rules/grounding.md
 
 <pre-loaded-context>
 # PROJECT.md
