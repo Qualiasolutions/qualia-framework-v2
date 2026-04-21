@@ -8,6 +8,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Note: git tags for historical versions were not retained; commit references are approximate
 > and dates reflect commit history rather than npm publish timestamps.
 
+## [4.1.0] — 2026-04-21
+
+**Command quality + build workflow hardening.** Deep research across 5 parallel Opus agents surfaced 15 concrete improvements — shipped across 4 commits. Every agent spawn now loads a shared **Grounding Protocol** (cite-or-INSUFFICIENT-EVIDENCE, no hedging, file:line evidence required for every finding) and deterministic scoring rubrics. Build workflow gains cache-aware prompt ordering (92% prefix-cache hit rate per Anthropic docs), explicit parallel wave dispatch, and a structured builder output contract. `qualia-debug` was fully rewritten from interactive to investigative one-shot. Research reports committed to `docs/research/`. 168/168 tests passing.
+
+### Added
+
+- **`rules/grounding.md` — shared Grounding Protocol + 5 rubrics.** New file referenced from every skill that spawns a subagent. Contains: 8-rule Grounding Protocol (every claim requires `file:line — "quoted"` evidence, no hedging language, scores require rubric citations, output shapes are contracts, tool budgets enforced, preconditions checked); **Severity Rubric** with objective criteria per level and a deterministic `max(1, 5 − ⌊weighted_sum/8⌋)` category-score formula; **Task-Done Rubric** (compiles / no stubs / wired / AC validated / committed); **Evidence Citation Format**; **Deviation JSON Format**; **Design Quality Rubric** (6 dimensions × 3 levels); **cache-aware prompt-ordering rule**. Install.js picks this up automatically via `rules/` directory copy.
+- **Structured Output Contract for builder** (`agents/builder.md`). Builder must return `DONE — Task {N}: {commit_hash}` with file list, `BLOCKED — {reason}` with JSON deviation block (`{type, task, file, planned, actual, impact}`), or `PARTIAL — {done}; remaining: {left}`. Orchestrator can now parse results programmatically instead of regex-guessing free-text.
+- **Explicit file-based dependency graph for wave assignment** (`agents/planner.md`). Replaces vibes-based "tasks with no dependencies" with a mechanical algorithm: build `writes(T)` / `reads(T)` sets from Files and Context fields, declare edge A→B when `writes(A) ∩ reads(B) ≠ ∅`, topological-sort into waves, enforce write-conflict check within each wave. Worked example table included. Same inputs → same waves.
+- **Rule 8 for plan-checker** (`agents/plan-checker.md`). Each task's `**Validation:**` list must include at least one `grep-match` or `command-exit` that tests behavior — a task whose only Validation is `test -f {file}` fails the rule. Stops stubs and placeholders from passing the build gate.
+- **Tool budgets** across 3 open-ended agents: researcher (3 Context7 + 3 WebFetch + 2 WebSearch per dimension), verifier (25 bash/grep per invocation), plan-checker (10 per invocation), qualia-debug (10 Read/Grep/Bash). Enforces INSUFFICIENT EVIDENCE return over speculative output when budget exhausted.
+- **Frontend gate on verifier's Design Verification section** (`agents/verifier.md`). Grep the phase plan for `.tsx`/`.jsx`/`.css`/`Persona:\s*(frontend|ux)` first — if absent, skip the ~40-command design verification block entirely. Saves substantial time on backend-only phases.
+- **`<wave_context>` block in builder prompts** (`skills/qualia-build/SKILL.md`). Lists sibling tasks in the same wave (title + files only, ~50 tokens per task) so parallel builders don't make conflicting semantic choices on shared types or patterns.
+- **Evidence citation requirement for milestone suggestions** (`agents/research-synthesizer.md`). Every arc entry must cite `[DIMENSION.md: <finding>]`. Speculative milestones marked `[speculative — no source]`.
+- **Parallel Agent fan-out in `qualia-design`** for >5 target files. Batches of 5, one Agent per batch, all dispatched in a single response turn. Post-fix verification greps catch reverted anti-patterns (`outline:none` without replacement, generic fonts, `max-w-7xl`, missing alt, blue-purple gradients).
+- **Parallelized security scans in `qualia-review`.** Independent greps now explicitly dispatched as parallel Bash calls in one turn. Saves 15-30s on large codebases.
+- **Typed input contracts across 7 agents** (planner, plan-checker, builder, verifier, researcher, qa-browser, roadmapper). Replaces prose "You receive: X + Y" with `<variable>` blocks + types + sources. Catches missing inputs at prompt-assembly time instead of mid-execution.
+- **`<full_detail>` declared in roadmapper Input section.** Was a ghost parameter referenced in the body but never declared — orchestrator had no mechanism to pass it.
+- **Cache-aware prompt structure in `qualia-build`.** Split `<phase_context>` (PROJECT.md/DESIGN.md, phase-stable) from `<task_context>` (per-task @files, varies). Stable prefix first, dynamic last — preserves Anthropic prompt-caching prefix-hit across parallel wave tasks (docs report 92% hit rate + 81% cost reduction at Claude Code scale when prefix is byte-identical).
+- **Research reports in `docs/research/`** documenting the analysis: `2026-04-21-command-quality-deep-research.md` (15-item synthesis from 4 parallel Opus audits) and `2026-04-21-industry-best-practices.md` (255 lines, cited sources on prompt caching, verification loops, hallucination reduction, multi-agent orchestration).
+
+### Changed
+
+- **Plan-checker revision loop capped at 2 iterations** (was 3). Amazon/NeurIPS 2025 measured reflection gains at 74%→86% for 1 round, only 88% for 3 rounds — iteration 3 added 2pp over iteration 1, not worth the extra planner spawn. Updated `qualia-plan/SKILL.md`, `plan-checker.md`, and all stale "3 cycles" references.
+- **`qualia-review` scoring replaced subjective thresholds with deterministic formula.** Quick-reference table rewritten to match the computed formula (earlier drafts had inconsistent boundary rules — verified mechanically during release QA and corrected).
+- **Verifier now receives PROJECT.md inlined in its spawn prompt.** Previously blind to project conventions — Quality scoring rubric referenced "project conventions" but verifier had no way to read them.
+- **Wave dispatch explicitly parallel in `qualia-build/SKILL.md`.** Replaced "parallel if multiple" language with an explicit instruction: spawn all wave tasks as separate `Agent()` calls in the SAME response turn — do NOT await one before the next. Prior natural-language phrasing relied on harness behavior rather than enforcing true concurrency.
+- **`qualia-debug` rewritten from interactive to investigative one-shot.** Previously required 4 mandatory user questions and a diagnosis-confirmation gate before any investigation. Now parses symptom from `$ARGUMENTS`, runs diagnostic grep batches (general/frontend/perf modes), hard 10-call tool budget, INSUFFICIENT EVIDENCE return instead of speculative fixes, structured DEBUG-{timestamp}.md report output to `.planning/`. Matches the one-shot pattern of every other `/qualia-*` command.
+- **`qualia-design` critique section now uses the structured Design Quality Rubric** (File | Dimension | Issue | Line | Severity) instead of vibes-based evaluation. Any dimension scoring below 4 is a mandatory fix.
+
+### Fixed
+
+- **Latent `grep -qL` bug in `qualia-review` API auth check.** The combination of `-q` (quiet) and `-L` (list non-matching files) is undefined in POSIX and was producing inverted "UNPROTECTED" output. Rewrote as a clean `if ! grep -q ... then echo UNPROTECTED` loop. Verified against mock directory of protected + unprotected routes.
+- **Full `npx next build` removed from `qualia-review` Performance Scan.** A 30-120s side-effectful build triggered during a "scan" command was a hidden cost that made review surprisingly slow and polluted `.next/`. Replaced with `du -sh .next/static/chunks/*.js` against existing build artifacts, with a warning if no build output exists.
+
+### Notes
+
+- **Always pin `@latest` when upgrading.** npx caches at `~/.npm/_npx/` and has no time-based TTL, so `npx qualia-framework install` can silently re-run a cached old copy. Use `npx qualia-framework@latest install` (or `npx clear-npx-cache` first). README updated to reflect this. ([npm/rfcs#700](https://github.com/npm/rfcs/issues/700))
+- Users who update the framework must re-run the install script so `~/.claude/rules/grounding.md` lands — every skill's spawn prompt now references this file.
+- Any client projects mid-phase where the plan-checker was on iteration 3 will now escalate at iteration 2. Acceptable trade-off per the measured reflection-gain data.
+- The builder Output Contract (`DONE/BLOCKED/PARTIAL`) is advisory today — existing orchestrator skills do not programmatically parse it. Enforcement will land in a follow-up minor when the parsing is wired through.
+
+### Deferred to v4.2.0
+
+- Mechanical-fix bypass in plan-checker (skip planner re-spawn for frontmatter/wave-assignment issues — ~4 hrs orchestration work, regression risk not suitable for this release).
+- Pre-Build Context Packet (single JSON consolidating PROJECT.md + DESIGN.md + plan + wave-context before spawning any builders).
+- Intra-wave task verification (run task Validation contracts immediately after each builder completes, before next wave starts).
+- New agents: migrator, dependency-auditor, rollback.
+- `curl` fallback in qa-browser for environments without Playwright MCP.
+
 ## [4.0.5] — 2026-04-19
 
 **Statusline refresh.** The phase segment now shows milestone + tasks +

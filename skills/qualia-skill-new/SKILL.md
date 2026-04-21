@@ -161,7 +161,7 @@ git add skills/{name}/
 git commit -m "feat: add /{name} skill"
 ```
 
-Remind the user to run `npx qualia-framework update` on their other machines, or bump the version and `npm publish`.
+Remind the user to run `npx qualia-framework@latest update` on their other machines (always pin `@latest` — npx caches aggressively), or bump the version and `npm publish`.
 
 ## Anti-Patterns
 

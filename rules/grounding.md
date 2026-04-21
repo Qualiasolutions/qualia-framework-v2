@@ -31,15 +31,18 @@ weighted_sum   = (critical × 8) + (high × 4) + (medium × 2) + (low × 1)
 category_score = max(1, 5 − floor(weighted_sum / 8))
 ```
 
-Examples:
-- 0/0/0/0 → score 5
-- 0/0/2/0 → weighted=4 → 5 − 0 = 5
-- 0/1/0/0 → weighted=4 → 5 − 0 = 5
-- 0/2/0/0 → weighted=8 → 5 − 1 = 4
-- 1/0/0/0 → weighted=8 → 5 − 1 = 4
-- 1/2/0/0 → weighted=16 → 5 − 2 = 3
-- 2/2/0/0 → weighted=24 → 5 − 3 = 2
-- 3+/any → weighted ≥24 → 2 or 1
+Examples (CRITICAL/HIGH/MEDIUM/LOW counts):
+- 0/0/0/0 → ws=0 → score 5
+- 0/0/2/0 → ws=4 → score 5
+- 0/1/0/0 → ws=4 → score 5
+- 0/2/0/0 → ws=8 → score 4
+- 0/3/0/0 → ws=12 → score 4
+- 1/0/0/0 → ws=8 → score 4
+- 1/2/0/0 → ws=16 → score 3
+- 2/0/0/0 → ws=16 → score 3
+- 2/2/0/0 → ws=24 → score 2
+- 3/0/0/0 → ws=24 → score 2
+- 4/0/0/0 → ws=32 → score 1
 
 ## Task-Done Rubric (for verifier, builder self-check)
 

@@ -15,7 +15,7 @@ allowed-tools:
 
 # /qualia-plan — Plan a Phase
 
-Spawn a planner agent to break the current phase into executable tasks, then validate the plan with a checker (up to 3 revision cycles) before routing to build.
+Spawn a planner agent to break the current phase into executable tasks, then validate the plan with a checker (up to 2 revision cycles) before routing to build.
 
 ## Usage
 

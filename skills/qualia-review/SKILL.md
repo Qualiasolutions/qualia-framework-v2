@@ -164,13 +164,12 @@ category_score = max(1, 5 − floor(weighted_sum / 8))
 ```
 Same inputs always produce the same score. No subjective thresholds.
 
-Quick reference:
-- 0 findings → 5
-- 1–2 medium or 1 high → 5
-- 2 high OR 1 critical → 4
-- 1 critical + 2 high OR 3 high → 3
-- 2 critical → 2
-- 3+ critical → 1
+Quick reference (computed from the formula — verified):
+- 0 findings, or only LOW/MEDIUM, or 1 HIGH → 5
+- 2–3 HIGH, or 1 CRITICAL → 4
+- 2 CRITICAL, or 1 CRITICAL + 2–3 HIGH → 3
+- 3 CRITICAL, or 2 CRITICAL + 2+ HIGH → 2
+- 4+ CRITICAL → 1
 
 ```bash
 node ~/.claude/bin/qualia-ui.js divider

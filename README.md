@@ -9,19 +9,21 @@ It is not an application framework like Rails or Next.js. It doesn't generate co
 ## Install
 
 ```bash
-npx qualia-framework install
+npx qualia-framework@latest install
 ```
 
 Enter your team code when prompted. Get your code from Fawzi.
 
+> **Why `@latest`?** npx caches packages at `~/.npm/_npx/` and has no time-based TTL — `npx qualia-framework install` (without `@latest`) will silently run whatever version you happened to fetch the first time, even if a newer one shipped. Always pin `@latest` when installing or upgrading. If a stale cache still bites you: `npx clear-npx-cache` then re-run.
+
 **Other commands:**
 ```bash
-npx qualia-framework version    # Check installed version + updates
-npx qualia-framework update     # Update to latest (remembers your code)
-npx qualia-framework uninstall  # Clean removal from ~/.claude/
-npx qualia-framework team list  # Show team members
-npx qualia-framework team add   # Add a team member
-npx qualia-framework traces     # View recent hook telemetry
+npx qualia-framework@latest version    # Check installed version + updates
+npx qualia-framework@latest update     # Update to latest (remembers your code)
+npx qualia-framework@latest uninstall  # Clean removal from ~/.claude/
+npx qualia-framework@latest team list  # Show team members
+npx qualia-framework@latest team add   # Add a team member
+npx qualia-framework@latest traces     # View recent hook telemetry
 ```
 
 ## Usage
@@ -177,7 +179,7 @@ Plans are grouped into waves for parallel execution. No fancy DAG solver — the
 ## Architecture
 
 ```
-npx qualia-framework install
+npx qualia-framework@latest install
      |
      v
 ~/.claude/
