@@ -80,10 +80,23 @@ Each session report gets a stable, sequential client-side identifier that travel
 
 ```bash
 # --dry-run: peek without incrementing
-if [ "$DRY_RUN" = "true" ]; then
-  CLIENT_REPORT_ID=$(node ~/.claude/bin/state.js next-report-id --peek 2>/dev/null | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0,'utf8')).report_id||'')")
-else
-  CLIENT_REPORT_ID=$(node ~/.claude/bin/state.js next-report-id 2>/dev/null | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0,'utf8')).report_id||'')")
+# Wrap the pipe in try/catch so a state.js failure (missing tracking.json,
+# corrupt JSON) produces a clear error instead of silently becoming "".
+PEEK_FLAG=""
+[ "$DRY_RUN" = "true" ] && PEEK_FLAG="--peek"
+CLIENT_REPORT_ID=$(node ~/.claude/bin/state.js next-report-id $PEEK_FLAG 2>/dev/null | node -e "
+  try {
+    const raw = require('fs').readFileSync(0,'utf8');
+    if (!raw.trim()) process.exit(2);
+    const j = JSON.parse(raw);
+    if (!j.report_id) process.exit(3);
+    process.stdout.write(j.report_id);
+  } catch (e) { process.exit(1); }
+")
+
+if [ -z "$CLIENT_REPORT_ID" ]; then
+  node ~/.claude/bin/qualia-ui.js fail "Could not obtain report ID from state.js — is .planning/tracking.json valid?"
+  exit 1
 fi
 ```
 
@@ -113,54 +126,73 @@ ERP_ENABLED=$(node -e "try{const c=JSON.parse(require('fs').readFileSync(require
 
 API_KEY=$(cat ~/.claude/.erp-api-key 2>/dev/null)
 REPORT_FILE=".planning/reports/report-{date}.md"
-SUBMITTED_BY=$(git config user.name)
+SUBMITTED_BY=$(git config user.name || echo "unknown")
 SUBMITTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+# Guard: ERP upload requires a non-empty API key. Without this check, curl
+# would POST with "Authorization: Bearer " (blank bearer) and the server
+# returns a generic 401 that is hard to diagnose.
+if [ "$ERP_ENABLED" = "true" ] && [ -z "$API_KEY" ] && [ "$DRY_RUN" != "true" ]; then
+  node ~/.claude/bin/qualia-ui.js warn "ERP API key missing (~/.claude/.erp-api-key is empty or unreadable). Skipping upload."
+  node ~/.claude/bin/qualia-ui.js info "Ask Fawzi for the ERP key, save to ~/.claude/.erp-api-key, then re-run /qualia-report --upload-only."
+  ERP_ENABLED="false"
+fi
 
 # Build structured JSON payload from tracking.json (matches ERP contract /api/v1/reports)
 # v4: include milestone_name, milestones[], team_id, project_id, git_remote,
 # session_started_at, last_pushed_at, build_count, deploy_count — the ERP
 # uses these to render the project tree (milestone → phases → unphased) correctly.
 # v4.0.4: client_report_id carries the QS-REPORT-NN identifier.
-PAYLOAD=$(node -e "
-  const fs = require('fs');
-  const t = JSON.parse(fs.readFileSync('.planning/tracking.json', 'utf8'));
-  const notes = fs.readFileSync('$REPORT_FILE', 'utf8').substring(0, 60000);
-  const commits = [];
-  try {
-    const { spawnSync } = require('child_process');
-    const r = spawnSync('git', ['log', '--oneline', '--since=8 hours ago', '--format=%h'], { encoding: 'utf8', timeout: 3000 });
-    if (r.stdout) commits.push(...r.stdout.trim().split('\n').filter(Boolean));
-  } catch {}
-  console.log(JSON.stringify({
-    project: t.project || require('path').basename(process.cwd()),
-    project_id: t.project_id || '',
-    team_id: t.team_id || '',
-    git_remote: t.git_remote || '',
-    client: t.client || '',
-    client_report_id: '$CLIENT_REPORT_ID',
-    milestone: t.milestone || 1,
-    milestone_name: t.milestone_name || '',
-    milestones: Array.isArray(t.milestones) ? t.milestones : [],
-    phase: t.phase,
-    phase_name: t.phase_name,
-    total_phases: t.total_phases,
-    status: t.status,
-    tasks_done: t.tasks_done || 0,
-    tasks_total: t.tasks_total || 0,
-    verification: t.verification || 'pending',
-    gap_cycles: (t.gap_cycles || {})[String(t.phase)] || 0,
-    build_count: t.build_count || 0,
-    deploy_count: t.deploy_count || 0,
-    deployed_url: t.deployed_url || '',
-    session_started_at: t.session_started_at || '',
-    last_pushed_at: t.last_pushed_at || '',
-    lifetime: t.lifetime || {},
-    commits: commits,
-    notes: notes,
-    submitted_by: '$SUBMITTED_BY',
-    submitted_at: '$SUBMITTED_AT'
-  }));
-")
+# Build payload. Pass user-controlled values (SUBMITTED_BY, CLIENT_REPORT_ID,
+# SUBMITTED_AT, REPORT_FILE) via env vars instead of shell interpolation — a
+# single quote or backslash in git user.name would otherwise break the node -e
+# script silently. process.env.* is inert to shell metacharacters.
+PAYLOAD=$(
+  SUBMITTED_BY="$SUBMITTED_BY" \
+  SUBMITTED_AT="$SUBMITTED_AT" \
+  CLIENT_REPORT_ID="$CLIENT_REPORT_ID" \
+  REPORT_FILE="$REPORT_FILE" \
+  node -e "
+    const fs = require('fs');
+    const t = JSON.parse(fs.readFileSync('.planning/tracking.json', 'utf8'));
+    const notes = fs.readFileSync(process.env.REPORT_FILE, 'utf8').substring(0, 60000);
+    const commits = [];
+    try {
+      const { spawnSync } = require('child_process');
+      const r = spawnSync('git', ['log', '--oneline', '--since=8 hours ago', '--format=%h'], { encoding: 'utf8', timeout: 3000 });
+      if (r.stdout) commits.push(...r.stdout.trim().split('\n').filter(Boolean));
+    } catch {}
+    console.log(JSON.stringify({
+      project: t.project || require('path').basename(process.cwd()),
+      project_id: t.project_id || '',
+      team_id: t.team_id || '',
+      git_remote: t.git_remote || '',
+      client: t.client || '',
+      client_report_id: process.env.CLIENT_REPORT_ID,
+      milestone: t.milestone || 1,
+      milestone_name: t.milestone_name || '',
+      milestones: Array.isArray(t.milestones) ? t.milestones : [],
+      phase: t.phase,
+      phase_name: t.phase_name,
+      total_phases: t.total_phases,
+      status: t.status,
+      tasks_done: t.tasks_done || 0,
+      tasks_total: t.tasks_total || 0,
+      verification: t.verification || 'pending',
+      gap_cycles: (t.gap_cycles || {})[String(t.phase)] || 0,
+      build_count: t.build_count || 0,
+      deploy_count: t.deploy_count || 0,
+      deployed_url: t.deployed_url || '',
+      session_started_at: t.session_started_at || '',
+      last_pushed_at: t.last_pushed_at || '',
+      lifetime: t.lifetime || {},
+      commits: commits,
+      notes: notes,
+      submitted_by: process.env.SUBMITTED_BY || 'unknown',
+      submitted_at: process.env.SUBMITTED_AT
+    }));
+  "
+)
 
 # --dry-run: print payload and stop (no POST, no commit, no increment already handled in step 4)
 if [ "$DRY_RUN" = "true" ]; then
@@ -199,7 +231,11 @@ if [ "$ERP_ENABLED" = "true" ]; then
 
     # 401 / 422 are permanent failures — no retry.
     if [ "$HTTP_CODE" = "401" ] || [ "$HTTP_CODE" = "422" ]; then
-      node ~/.claude/bin/qualia-ui.js warn "ERP rejected report (HTTP $HTTP_CODE). Ask Fawzi."
+      if [ "$HTTP_CODE" = "401" ]; then
+        node ~/.claude/bin/qualia-ui.js warn "ERP auth failed (HTTP 401) — API key in ~/.claude/.erp-api-key is invalid or revoked. Ask Fawzi for a fresh key."
+      else
+        node ~/.claude/bin/qualia-ui.js warn "ERP rejected payload (HTTP 422) — schema validation failed. Response body:"
+      fi
       echo "$BODY" | head -3
       break
     fi

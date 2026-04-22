@@ -25,6 +25,41 @@ const UI = path.join(HOME, ".claude", "bin", "qualia-ui.js");
 const STATE_FILE = path.join(".planning", "STATE.md");
 const CONTINUE_HERE = ".continue-here.md";
 const NOTIF_FILE = path.join(HOME, ".claude", ".qualia-update-available.json");
+const HEALTH_FILE = path.join(HOME, ".claude", ".qualia-install-health.json");
+
+// Critical files referenced by skills via @-import. If any are missing, skills
+// silently get empty context and produce ungrounded output. We spot-check these
+// on session-start and write a cached result (1-per-day) to HEALTH_FILE so we
+// don't stat on every session.
+const CRITICAL_FILES = [
+  path.join(HOME, ".claude", "rules", "grounding.md"),
+  path.join(HOME, ".claude", "rules", "security.md"),
+  path.join(HOME, ".claude", "rules", "frontend.md"),
+  path.join(HOME, ".claude", "rules", "deployment.md"),
+  path.join(HOME, ".claude", "bin", "state.js"),
+];
+
+function checkInstallHealth() {
+  // Returns null if healthy, or an array of missing files if damaged.
+  // Caches result in HEALTH_FILE for 24h to avoid repeated stat overhead.
+  try {
+    if (fs.existsSync(HEALTH_FILE)) {
+      const cached = JSON.parse(fs.readFileSync(HEALTH_FILE, "utf8"));
+      const age = Date.now() - (cached.checked_at || 0);
+      if (age < 24 * 60 * 60 * 1000) {
+        return cached.missing && cached.missing.length ? cached.missing : null;
+      }
+    }
+  } catch {}
+  const missing = CRITICAL_FILES.filter((f) => !fs.existsSync(f));
+  try {
+    fs.writeFileSync(
+      HEALTH_FILE,
+      JSON.stringify({ checked_at: Date.now(), missing }, null, 2),
+    );
+  } catch {}
+  return missing.length ? missing : null;
+}
 
 function runUi(...args) {
   if (!fs.existsSync(UI)) return;
@@ -94,8 +129,24 @@ function maybeRenderUpdateBanner() {
   } catch {}
 }
 
+function renderHealthWarning(missing) {
+  // Loud, non-blocking warning when critical install files are missing.
+  // Tells the user exactly what to run — never silent.
+  const label = missing.map((f) => path.basename(f)).join(", ");
+  if (fs.existsSync(UI)) {
+    runUi("warn", `Install incomplete — missing: ${label}`);
+    runUi("info", "Run: npx qualia-framework@latest install");
+  } else {
+    console.log(`QUALIA: Install incomplete — missing ${label}`);
+    console.log(`QUALIA: Run: npx qualia-framework@latest install`);
+  }
+}
+
 try {
   maybeRenderUpdateBanner();
+
+  const healthMissing = checkInstallHealth();
+  if (healthMissing) renderHealthWarning(healthMissing);
 
   if (!fs.existsSync(UI)) {
     fallbackText();
@@ -125,8 +176,23 @@ try {
     console.log(`    ${TEAL}/qualia-quick${RESET}  ${DIM}Quick fix (skip planning)${RESET}`);
     console.log("");
   }
-} catch {
-  // Deliberately silent — hook must never fail
+} catch (e) {
+  // Hook must never exit non-zero. Log to trace so silent crashes are visible
+  // in analytics, but do not print to stderr (would clutter the banner).
+  try {
+    const traceDir = path.join(os.homedir(), ".claude", ".qualia-traces");
+    if (!fs.existsSync(traceDir)) fs.mkdirSync(traceDir, { recursive: true });
+    const file = path.join(traceDir, `${new Date().toISOString().split("T")[0]}.jsonl`);
+    fs.appendFileSync(
+      file,
+      JSON.stringify({
+        hook: "session-start",
+        result: "error",
+        error: String(e && e.message ? e.message : e),
+        timestamp: new Date().toISOString(),
+      }) + "\n",
+    );
+  } catch {}
 }
 
 function _trace(hookName, result, extra) {

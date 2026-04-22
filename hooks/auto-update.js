@@ -110,6 +110,11 @@ try {
         detected_at: new Date().toISOString(),
       }, null, 2));
     } catch {}
+    // Invalidate the session-start health cache so the next session re-checks
+    // whether new critical files shipped in the latest version are installed.
+    try {
+      fs.unlinkSync(path.join(CLAUDE_DIR, ".qualia-install-health.json"));
+    } catch {}
     _trace("auto-update", "allow", { reason: "notification-written", current: cfg.version, latest });
   } else {
     // Already up to date — clear any stale notification file.
