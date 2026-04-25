@@ -8,6 +8,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Note: git tags for historical versions were not retained; commit references are approximate
 > and dates reflect commit history rather than npm publish timestamps.
 
+## [Unreleased] — v4.3.0 phase 2 (cron-runnable memory flush)
+
+**`bin/knowledge-flush.js` — non-interactive `/qualia-flush` runner.** Closes the memory loop so it runs without a Claude Code session: cron triggers the script weekly, it shells out to `claude -p "/qualia-flush --days 7"`, the skill promotes the past week's daily-log entries to the curated tier, the loader makes them reachable on the next builder spawn. The framework now compounds even on weeks when no project is touched.
+
+### Added
+
+- **`bin/knowledge-flush.js`** — Cron-runnable Node script that wraps `/qualia-flush`. Pass-through args (`--days N`, `--dry-run`, `--project NAME`). Hard-caps the underlying `claude -p` call at 5 minutes. Writes a structured JSONL audit log to `~/.claude/.qualia-flush.log` so the user can inspect when/what each scheduled run produced. Cron-spam-safe by design: missing `claude` CLI on PATH → exits 0 with logged skip; empty daily-log within the window → exits 0 silently; only true execution failures exit 1 (so `MAILTO=` cron alerts are signal not noise). Recommended cron line is documented in the script header.
+- **`qualia-framework flush` CLI command** — convenience wrapper around the script for ad-hoc invocation. `qualia-framework flush --dry-run` previews what the next cron run would do.
+
+### Changed
+
+- **`bin/install.js` ships `knowledge-flush.js`** alongside the other bin files. Chmod'd executable, included in `QUALIA_BIN_FILES` for clean uninstall, checked by `doctor`. The CLI's `help` lists the new command.
+
+### How to enable weekly auto-flush
+
+Add this to your crontab (`crontab -e`):
+
+```
+0 3 * * 0 node ~/.claude/bin/knowledge-flush.js >> ~/.claude/.qualia-flush.log 2>&1
+```
+
+Sunday 3 AM local. Adjust the schedule to taste. The script self-skips when there's nothing to flush, so daily cadence is also safe — just wasteful.
+
+### Notes
+
+This finishes the **memory-loop end-to-end automation** that v4.2.0 phase 1 began: Stop hook captures every turn → cron-fired flush promotes the survivors → loader makes the curated tier reachable to every spawn. No human action required between weeks; the framework gets smarter on autopilot.
+
+What's left in v4.3.0: **worktree-aware phase parallelism** (Cole Medin's pillars 2–4: `bin/qualia-worktree.sh` + port-from-hash + Supabase branch-per-worktree). That's a meaningfully bigger lift involving real shell scripts and edge-case handling around port allocation and database isolation; saving for a dedicated milestone phase rather than stacking on top of the already-substantial v4.2.0 + v4.3.0 phase 1+2 review surface.
+
 ## [Unreleased] — v4.3.0 phase 1 (self-healing + adversarial + subdir loader)
 
 **Self-healing AI layer + adversarial second-opinion verifier + loader subdirectory support.** First slice of the v4.3.0 "Parallel + Self-Healing" milestone. Stacks on the v4.2.0 phase 3 (`feat/v4.2.0-flush-and-forks`).

@@ -416,6 +416,12 @@ async function main() {
     );
     fs.chmodSync(path.join(binDest, "knowledge.js"), 0o755);
     ok("knowledge.js (memory-layer loader)");
+    copy(
+      path.join(FRAMEWORK_DIR, "bin", "knowledge-flush.js"),
+      path.join(binDest, "knowledge-flush.js")
+    );
+    fs.chmodSync(path.join(binDest, "knowledge-flush.js"), 0o755);
+    ok("knowledge-flush.js (cron-runnable flush)");
   } catch (e) {
     warn(`scripts — ${e.message}`);
   }

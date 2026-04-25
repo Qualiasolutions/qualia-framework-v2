@@ -159,7 +159,7 @@ const QUALIA_AGENT_FILES = [
 ];
 
 // 3 Qualia bin scripts.
-const QUALIA_BIN_FILES = ["state.js", "qualia-ui.js", "statusline.js", "knowledge.js"];
+const QUALIA_BIN_FILES = ["state.js", "qualia-ui.js", "statusline.js", "knowledge.js", "knowledge-flush.js"];
 
 // 5 Qualia rules.
 const QUALIA_RULE_FILES = ["security.md", "frontend.md", "design-reference.md", "deployment.md", "infrastructure.md"];
@@ -879,6 +879,24 @@ function cmdErpPing() {
 // missing files, mis-wired hooks, stale settings.json, and version drift.
 // Use whenever something feels off, before opening an issue, or after a
 // version upgrade. Exits 0 if healthy, 1 if any issue is found.
+// ─── Flush: convenience wrapper around knowledge-flush.js ───────
+// Exposes the cron-runnable script as a top-level CLI command so users can
+// run `qualia-framework flush` ad-hoc. All args after the command pass through.
+function cmdFlush() {
+  const flushScript = path.join(CLAUDE_DIR, "bin", "knowledge-flush.js");
+  if (!fs.existsSync(flushScript)) {
+    console.log(`  ${RED}✗${RESET} knowledge-flush.js not installed at ${flushScript}`);
+    console.log(`  ${DIM}Run: npx qualia-framework@latest install${RESET}`);
+    process.exit(1);
+  }
+  const args = process.argv.slice(3);
+  const r = spawnSync(process.execPath, [flushScript, ...args], {
+    stdio: "inherit",
+    shell: false,
+  });
+  process.exit(typeof r.status === "number" ? r.status : 1);
+}
+
 function cmdDoctor() {
   banner();
   console.log("");
@@ -901,6 +919,7 @@ function cmdDoctor() {
     path.join(CLAUDE_DIR, "bin", "qualia-ui.js"),
     path.join(CLAUDE_DIR, "bin", "statusline.js"),
     path.join(CLAUDE_DIR, "bin", "knowledge.js"),
+    path.join(CLAUDE_DIR, "bin", "knowledge-flush.js"),
     path.join(CLAUDE_DIR, "CLAUDE.md"),
     CONFIG_FILE,
   ];
@@ -995,7 +1014,8 @@ function cmdHelp() {
   console.log(`    qualia-framework ${TEAL}traces${RESET}       View recent hook telemetry`);
   console.log(`    qualia-framework ${TEAL}analytics${RESET}    Show outcome scoring & gap cycle stats`);
   console.log(`    qualia-framework ${TEAL}erp-ping${RESET}     Verify ERP connectivity + API key
-    qualia-framework ${TEAL}doctor${RESET}       Health-check the install (files, hooks, settings)`);
+    qualia-framework ${TEAL}doctor${RESET}       Health-check the install (files, hooks, settings)
+    qualia-framework ${TEAL}flush${RESET}        Promote daily-log → curated knowledge (memory layer)`);
   console.log("");
   console.log(`  ${WHITE}After install:${RESET}`);
   console.log(`    ${TG}/qualia${RESET}          What should I do next?`);
@@ -1056,6 +1076,10 @@ switch (cmd) {
   case "health":
   case "health-check":
     cmdDoctor();
+    break;
+  case "flush":
+  case "knowledge-flush":
+    cmdFlush();
     break;
   default:
     cmdHelp();

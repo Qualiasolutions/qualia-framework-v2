@@ -938,6 +938,57 @@ else
   fail_case "qualia-verify missing postmortem wiring"
 fi
 
+# 73. knowledge-flush.js installs at ~/.claude/bin/
+if [ -f "$TMP/.claude/bin/knowledge-flush.js" ]; then
+  pass "knowledge-flush.js installs"
+else
+  fail_case "knowledge-flush.js missing after install"
+fi
+
+# 74. knowledge-flush.js is syntactically valid Node
+EXIT=0; $NODE -c "$TMP/.claude/bin/knowledge-flush.js" 2>/dev/null || EXIT=$?
+if [ "$EXIT" -eq 0 ]; then
+  pass "knowledge-flush.js parses as valid Node"
+else
+  fail_case "knowledge-flush.js parse error"
+fi
+
+# 75. knowledge-flush.js exits 0 with no daily-log (cron-friendly: no spam)
+TMP_HOME=$(mktmp)
+mkdir -p "$TMP_HOME/.claude/knowledge"
+EXIT=0; HOME="$TMP_HOME" $NODE "$FRAMEWORK_DIR/bin/knowledge-flush.js" >/dev/null 2>&1 || EXIT=$?
+if [ "$EXIT" -eq 0 ]; then
+  pass "knowledge-flush exits 0 with no daily-log (no cron spam)"
+else
+  fail_case "knowledge-flush exited $EXIT with no daily-log"
+fi
+
+# 76. knowledge-flush.js writes structured JSONL log even on skip
+TMP_HOME=$(mktmp)
+HOME="$TMP_HOME" $NODE "$FRAMEWORK_DIR/bin/knowledge-flush.js" >/dev/null 2>&1
+if [ -f "$TMP_HOME/.claude/.qualia-flush.log" ] && grep -q '"event":"skipped"' "$TMP_HOME/.claude/.qualia-flush.log"; then
+  pass "knowledge-flush writes JSONL audit log"
+else
+  fail_case "knowledge-flush no audit log"
+fi
+
+# 77. CLI `qualia-framework flush` dispatches to the script (errors when not installed)
+TMP_HOME=$(mktmp)
+EXIT=0; OUT=$(HOME="$TMP_HOME" $NODE "$CLI_JS" flush 2>&1) || EXIT=$?
+if [ "$EXIT" -eq 1 ] && echo "$OUT" | grep -q "knowledge-flush.js not installed"; then
+  pass "CLI flush command surfaces install error gracefully"
+else
+  fail_case "CLI flush dispatch" "exit=$EXIT out=$OUT"
+fi
+
+# 78. CLI flush command appears in help text
+EXIT=0; OUT=$($NODE "$CLI_JS" help 2>&1) || EXIT=$?
+if [ "$EXIT" -eq 0 ] && echo "$OUT" | grep -q "flush"; then
+  pass "help text documents flush command"
+else
+  fail_case "help missing flush" "exit=$EXIT"
+fi
+
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="
 [ "$FAIL" -eq 0 ] && exit 0 || exit 1
