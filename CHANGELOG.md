@@ -8,6 +8,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Note: git tags for historical versions were not retained; commit references are approximate
 > and dates reflect commit history rather than npm publish timestamps.
 
+## [Unreleased] — v4.2.0 phase 3 (flush + forks + model matrix)
+
+**Closes the Karpathy raw → wiki loop, enables forked subagents, conservative model matrix.** Final phase of the v4.2.0 "Compound" milestone. Stacks on the foundation (#9) and knowledge loader (#10).
+
+### Added
+
+- **`/qualia-flush` skill (`skills/qualia-flush/SKILL.md`).** The LLM job that closes the memory-layer loop. Reads recent `~/.claude/knowledge/daily-log/*.md` entries (default 14-day window, configurable with `--days N`), groups them by project, identifies recurring patterns/decisions across multiple sessions, and promotes the survivors via `node ~/.claude/bin/knowledge.js append --type {pattern|fix|client}`. Encodes Karpathy's raw → wiki promotion in a Qualia-shaped skill: read raw, extract durable signal, write structured. Conservative by design — false-positive promotions pollute the wiki, so single-occurrence entries stay in the raw tier until they recur. Supports `--dry-run` to preview without writing, `--project NAME` to scope to one project. Recommended cadence: weekly. (v4.3.0 will add a non-interactive `bin/knowledge-flush.js` runner so the same logic can run from cron without a Claude session.)
+- **`CLAUDE_AGENT_FORK_ENABLED=1` in `~/.claude/settings.json` env block.** Anthropic shipped forked subagents in 2026-04 specifically to solve the "design subagent loses 50k tokens of nuance" failure mode. Forks inherit the entire conversation history + share the prompt cache, so when the main session has accumulated taste discussion (font choices, palette, motion preferences), spawning a forked variant for batch work is dramatically higher-quality than a blank-context fan-out. We turn this on by default for all installs.
+- **`/qualia-design` now prefers forked subagents for batch fan-out** when the conversation contains design-taste context. Blank-context spawns are still used for mechanical anti-pattern fixes (no nuance to inherit). The skill explicitly tells Claude when to fork vs. when not to — informed by Cole Medin's NotebookLM 2026-04-25 source on the Anthropic subagent upgrade.
+
+### Changed
+
+- **`agents/research-synthesizer.md` now uses `model: haiku`.** Conservative first entry in the model-per-agent matrix recommended by Cole Medin's "model-per-node" pattern. Synthesizer is pure markdown merging — no new reasoning, just consolidating four well-structured research files. Haiku is ~7× cheaper with no observable quality loss for this work shape. **Deliberately not changed:** planner, builder, verifier, plan-checker, roadmapper, qa-browser — all retain their default (inherited) model. These are high-stakes and benefit from the upper model. Future releases may extend the matrix once we have token-usage data, but the principle stays: only switch where the work is mechanical, not where it's stakes-bearing.
+
+### Fixed
+
+(none — phase 3 is purely additive)
+
+### Notes
+
+This phase 3 is the half that turns the v4.2.0 foundation from "infrastructure that captures data" into "compound system that gets smarter every week." With phases 1+2+3 merged: the Stop hook writes daily-log entries automatically; `/qualia-flush` promotes the survivors to the curated tier weekly; the loader makes them reachable to every skill via the index; the builder reads them before writing code. The Karpathy memory loop is closed.
+
+What's deferred to v4.3.0 (separate milestone): non-interactive `bin/knowledge-flush.js` cron runner, subdirectory support in the loader so `concepts/{topic}.md` files are reachable as `knowledge.js load <topic>`, worktree-aware phase parallelism, the self-healing `/qualia-postmortem` skill, adversarial second-opinion verifier.
+
 ## [Unreleased] — v4.2.0 phase 2 (knowledge loader)
 
 **Unified knowledge loader + builder/skill rewiring.** Builds on the v4.2.0 foundation by introducing `bin/knowledge.js`, a single entry point for the memory layer that replaces the scattered `cat ~/.claude/knowledge/X.md` calls in skills. Directly resolves v4.1.0 audit finding #3 ("11 of 14 knowledge files are invisible to every skill") and audit finding #2 ("Builder agent never reads knowledge").

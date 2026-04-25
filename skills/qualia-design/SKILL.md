@@ -59,6 +59,21 @@ Apply fixes to every HIGH and CRITICAL item. MEDIUM items fixed if cheap (same f
 
 Split target files into batches of 5. Spawn one Agent per batch IN THE SAME RESPONSE TURN (parallel execution). Each agent receives DESIGN.md inlined + its 5 files + the Design Quality Rubric from `rules/grounding.md`. Agents return their batch's critique table + the actual edits applied. The skill orchestrator fans in the results and runs the final verification (step 5).
 
+**Forked subagents (v4.2.0+):** if the current conversation already contains
+design taste discussion (font choices, palette discussion, motion preferences,
+or any color/typography critique threaded across multiple turns) AND
+`CLAUDE_AGENT_FORK_ENABLED=1` is set in `~/.claude/settings.json` (the v4.2.0
+default), prefer **forked subagents** over blank-context fan-out. Forks
+inherit the entire conversation history + share the prompt cache, so the
+batch agents see the 50k tokens of accumulated taste instead of a 2k-token
+compression. Anthropic shipped this in 2026-04 specifically to solve the
+"design subagent loses nuance" failure mode (NotebookLM 2026-04-25 source).
+Tell Claude explicitly: "spawn forked subagents to handle these batches in
+parallel." For variation-generation work (3 alternative homepage designs)
+forks are almost always the right call. For mechanical anti-pattern fixes
+(rip out `outline:none`, swap font tokens) blank context is fine — no
+nuance to inherit. When in doubt, fork — the cost is the same prompt cache.
+
 ```
 Agent(prompt="
 Read your role: builder for design transformation.

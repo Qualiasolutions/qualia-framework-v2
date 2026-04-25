@@ -604,6 +604,15 @@ Client-specific preferences, design choices, and requirements. Loaded by \`/qual
     CLAUDE_CODE_DISABLE_AUTO_MEMORY: "0",
     MAX_MCP_OUTPUT_TOKENS: "25000",
     CLAUDE_CODE_NO_FLICKER: "1",
+    // v4.2.0 phase 3 — enable forked subagents (Anthropic, 2026-04).
+    // Forks inherit the full conversation history + share the prompt cache,
+    // so design fan-outs and discuss-context handoffs preserve nuance instead
+    // of compressing 50k tokens of taste discussion into a 2k subagent prompt.
+    // /qualia-design and the builder agent reach for /fork when discuss
+    // context exists in the current session; verifier and plan-checker still
+    // use blank-context spawns to avoid the "kid grading their own homework"
+    // failure mode.
+    CLAUDE_AGENT_FORK_ENABLED: "1",
   });
 
   // Status line

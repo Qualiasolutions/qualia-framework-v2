@@ -686,6 +686,46 @@ else
 fi
 
 echo ""
+echo "--- v4.2.0 phase 3 (flush + forks + model matrix) ---"
+
+# 61. qualia-flush skill installs
+TMP=$(mktmp)
+echo "QS-FAWZI-01" | HOME="$TMP" $NODE "$INSTALL_JS" >/dev/null 2>&1
+if [ -f "$TMP/.claude/skills/qualia-flush/SKILL.md" ]; then
+  pass "qualia-flush skill installs"
+else
+  fail_case "qualia-flush skill missing after install"
+fi
+
+# 62. CLAUDE_AGENT_FORK_ENABLED=1 in settings.json
+if grep -q '"CLAUDE_AGENT_FORK_ENABLED": "1"' "$TMP/.claude/settings.json"; then
+  pass "settings.env CLAUDE_AGENT_FORK_ENABLED=1 (forked subagents on by default)"
+else
+  fail_case "CLAUDE_AGENT_FORK_ENABLED not set"
+fi
+
+# 63. research-synthesizer agent has model: haiku frontmatter
+if grep -q '^model: haiku$' "$TMP/.claude/agents/research-synthesizer.md"; then
+  pass "research-synthesizer agent uses haiku (model matrix)"
+else
+  fail_case "research-synthesizer missing model frontmatter"
+fi
+
+# 64. Other agents do NOT have model frontmatter (conservative matrix)
+SAFE_AGENTS=("planner.md" "builder.md" "verifier.md" "plan-checker.md")
+ALL_OK=1
+for a in "${SAFE_AGENTS[@]}"; do
+  if grep -q '^model: ' "$TMP/.claude/agents/$a" 2>/dev/null; then
+    ALL_OK=0
+  fi
+done
+if [ "$ALL_OK" = "1" ]; then
+  pass "high-stakes agents (planner/builder/verifier/plan-checker) keep default model"
+else
+  fail_case "high-stakes agent has unexpected model frontmatter"
+fi
+
+echo ""
 echo "--- knowledge.js (memory-layer loader) ---"
 
 KN="$FRAMEWORK_DIR/bin/knowledge.js"

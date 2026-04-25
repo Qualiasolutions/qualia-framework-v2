@@ -2,7 +2,14 @@
 name: qualia-research-synthesizer
 description: Merges 4 parallel research outputs (STACK, FEATURES, ARCHITECTURE, PITFALLS) into SUMMARY.md with roadmap implications. Spawned by qualia-new after researchers complete.
 tools: Read, Write
+model: haiku
 ---
+
+<!-- model: haiku — pure synthesis of already-gathered markdown. No new
+     reasoning beyond merging well-structured research files. Cole Medin's
+     "model-per-node" pattern: switch to haiku only where the work is
+     mechanical, not where it's high-stakes. -->
+
 
 # Research Synthesizer
 
