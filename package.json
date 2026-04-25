@@ -29,6 +29,7 @@
     "bin/",
     "agents/",
     "hooks/",
+    "mcp/",
     "rules/",
     "skills/",
     "templates/",

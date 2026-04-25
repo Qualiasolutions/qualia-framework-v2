@@ -2810,3 +2810,182 @@ describe("install.js", () => {
     }
   });
 });
+
+// ─── Memory MCP server ─────────────────────────────────────
+describe("memory-mcp server", () => {
+  const SERVER = path.join(ROOT, "mcp", "memory-mcp", "server.js");
+
+  // Drive the server through line-delimited JSON-RPC frames synchronously.
+  // Returns an array of parsed responses in order.
+  function rpc(frames, env = {}) {
+    const input = frames.map((f) => JSON.stringify(f)).join("\n") + "\n";
+    const r = spawnSync(process.execPath, [SERVER], {
+      encoding: "utf8",
+      timeout: 8000,
+      input,
+      env: { ...process.env, ...env },
+    });
+    return (r.stdout || "")
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+  }
+
+  it("responds to initialize with protocol + serverInfo", () => {
+    const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "memory-mcp-"));
+    try {
+      fs.mkdirSync(path.join(tmpRoot, "wiki"), { recursive: true });
+      const out = rpc(
+        [{ jsonrpc: "2.0", id: 1, method: "initialize" }],
+        { QUALIA_MEMORY_ROOT: tmpRoot },
+      );
+      assert.equal(out[0].id, 1);
+      assert.equal(out[0].result.serverInfo.name, "qualia-memory");
+      assert.ok(out[0].result.protocolVersion);
+      assert.ok(out[0].result.capabilities.tools);
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("tools/list advertises three read-only tools", () => {
+    const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "memory-mcp-"));
+    try {
+      fs.mkdirSync(path.join(tmpRoot, "wiki"), { recursive: true });
+      const out = rpc(
+        [{ jsonrpc: "2.0", id: 1, method: "tools/list" }],
+        { QUALIA_MEMORY_ROOT: tmpRoot },
+      );
+      const names = out[0].result.tools.map((t) => t.name).sort();
+      assert.deepEqual(names, ["memory.list", "memory.read", "memory.search"]);
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("memory.search finds matches and returns file:line:snippet", () => {
+    const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "memory-mcp-"));
+    try {
+      const wiki = path.join(tmpRoot, "wiki");
+      fs.mkdirSync(path.join(wiki, "concepts"), { recursive: true });
+      fs.writeFileSync(
+        path.join(wiki, "concepts", "alpha.md"),
+        "# Alpha\nSakani Properties uses Mapbox.\nUnrelated line.\n",
+      );
+      const out = rpc(
+        [
+          {
+            jsonrpc: "2.0",
+            id: 1,
+            method: "tools/call",
+            params: { name: "memory.search", arguments: { query: "Mapbox" } },
+          },
+        ],
+        { QUALIA_MEMORY_ROOT: tmpRoot },
+      );
+      const payload = JSON.parse(out[0].result.content[0].text);
+      assert.equal(payload.total, 1);
+      assert.equal(payload.hits[0].path, "concepts/alpha.md");
+      assert.equal(payload.hits[0].line, 2);
+      assert.match(payload.hits[0].snippet, /Mapbox/);
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("memory.read returns file content under the wiki", () => {
+    const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "memory-mcp-"));
+    try {
+      const wiki = path.join(tmpRoot, "wiki");
+      fs.mkdirSync(wiki, { recursive: true });
+      fs.writeFileSync(path.join(wiki, "hot.md"), "recent context");
+      const out = rpc(
+        [
+          {
+            jsonrpc: "2.0",
+            id: 1,
+            method: "tools/call",
+            params: { name: "memory.read", arguments: { path: "hot.md" } },
+          },
+        ],
+        { QUALIA_MEMORY_ROOT: tmpRoot },
+      );
+      const payload = JSON.parse(out[0].result.content[0].text);
+      assert.equal(payload.content, "recent context");
+      assert.equal(payload.truncated, false);
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("memory.read rejects path traversal outside wiki/", () => {
+    const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "memory-mcp-"));
+    try {
+      fs.mkdirSync(path.join(tmpRoot, "wiki"), { recursive: true });
+      // Sibling secret outside wiki/ — must not be reachable via ..
+      fs.writeFileSync(path.join(tmpRoot, "secret.txt"), "shhh");
+      const out = rpc(
+        [
+          {
+            jsonrpc: "2.0",
+            id: 1,
+            method: "tools/call",
+            params: { name: "memory.read", arguments: { path: "../secret.txt" } },
+          },
+        ],
+        { QUALIA_MEMORY_ROOT: tmpRoot },
+      );
+      assert.ok(out[0].error, "expected error response");
+      assert.match(out[0].error.message, /escapes wiki root/);
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("memory.list returns directories first, then files", () => {
+    const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "memory-mcp-"));
+    try {
+      const wiki = path.join(tmpRoot, "wiki");
+      fs.mkdirSync(path.join(wiki, "concepts"), { recursive: true });
+      fs.writeFileSync(path.join(wiki, "index.md"), "i");
+      const out = rpc(
+        [
+          {
+            jsonrpc: "2.0",
+            id: 1,
+            method: "tools/call",
+            params: { name: "memory.list", arguments: {} },
+          },
+        ],
+        { QUALIA_MEMORY_ROOT: tmpRoot },
+      );
+      const payload = JSON.parse(out[0].result.content[0].text);
+      assert.equal(payload.entries[0].type, "dir");
+      assert.equal(payload.entries[0].name, "concepts");
+      assert.ok(payload.entries.some((e) => e.name === "index.md" && e.type === "file"));
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("unknown tool returns JSON-RPC -32601", () => {
+    const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "memory-mcp-"));
+    try {
+      fs.mkdirSync(path.join(tmpRoot, "wiki"), { recursive: true });
+      const out = rpc(
+        [
+          {
+            jsonrpc: "2.0",
+            id: 1,
+            method: "tools/call",
+            params: { name: "memory.delete", arguments: {} },
+          },
+        ],
+        { QUALIA_MEMORY_ROOT: tmpRoot },
+      );
+      assert.equal(out[0].error.code, -32601);
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+});

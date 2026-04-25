@@ -757,6 +757,29 @@ Client-specific preferences, design choices, and requirements. Loaded by \`/qual
     ok("MCP: next-devtools (runtime error visibility for Next.js projects)");
   }
 
+  // ─── qualia-memory MCP ──────────────────────────────────
+  // Read-only access to the Karpathy LLM Wiki at ~/qualia-memory/. Three tools:
+  // memory.search, memory.read, memory.list. Zero deps — see docs/MEMORY-MCP.md.
+  // Registered globally so every Claude Code session has it without per-project
+  // .mcp.json. Users override the vault path via QUALIA_MEMORY_ROOT.
+  const memoryServerPath = path.join(FRAMEWORK_DIR, "mcp", "memory-mcp", "server.js");
+  if (!settings.mcpServers["qualia-memory"]) {
+    settings.mcpServers["qualia-memory"] = {
+      command: "node",
+      args: [memoryServerPath],
+      env: {
+        QUALIA_MEMORY_ROOT: path.join(require("os").homedir(), "qualia-memory"),
+      },
+      disabled: false,
+    };
+    ok("MCP: qualia-memory (read-only wiki at ~/qualia-memory/)");
+  } else {
+    // Always refresh the args path — the framework may have moved (npm i -g
+    // location, dev checkout vs published install). Env stays user-controlled.
+    settings.mcpServers["qualia-memory"].command = "node";
+    settings.mcpServers["qualia-memory"].args = [memoryServerPath];
+  }
+
   fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
 
   ok("Hooks: session-start, auto-update, branch-guard, pre-push, migration-guard, deploy-gate, pre-compact, git-guardrails, stop-session-log");
