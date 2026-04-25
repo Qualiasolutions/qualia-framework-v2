@@ -46,6 +46,8 @@ below).
   "team_id": "qualia-solutions",
   "git_remote": "github.com/QualiasolutionsCY/acme-portal",
   "client": "Client Name",
+  "client_id": "cl_acme_2026",
+  "framework_version": "4.1.1",
   "client_report_id": "QS-REPORT-03",
   "milestone": 2,
   "milestone_name": "Core Product",
@@ -229,6 +231,8 @@ Authorization: Bearer <api-key>
 | build_count | number | optional (v3.6+) | Lifetime build counter. |
 | deploy_count | number | optional (v3.6+) | Lifetime deploy counter. |
 | client_report_id | string | recommended (v4.0.4+) | Client-side sequential identifier: `QS-REPORT-01`, `QS-REPORT-02`, … per-project. Stable across retries. Preferred dedupe key over the ERP-generated `report_id`; safe to adopt as the ERP's primary report key. |
+| client_id | string | optional (v4.2+) | ERP-side foreign key to the `clients` row. Distinct from `client` (display name). Empty string when unknown — receivers should fall back to fuzzy match on `client`. |
+| framework_version | string | optional (v4.2+) | Semver of `qualia-framework` that produced the payload. Lets the ERP gate validation rules and roll out new fields without breaking older installations. Empty string for legacy payloads. |
 | dry_run | boolean | optional (v4.0.4+) | `true` marks a synthetic ping (from `qualia-framework erp-ping`). Receivers should filter these out of production report views. |
 
 All other fields are optional but recommended for complete reporting.

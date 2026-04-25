@@ -168,6 +168,8 @@ PAYLOAD=$(
       team_id: t.team_id || '',
       git_remote: t.git_remote || '',
       client: t.client || '',
+      client_id: t.client_id || '',
+      framework_version: t.framework_version || '',
       client_report_id: process.env.CLIENT_REPORT_ID,
       milestone: t.milestone || 1,
       milestone_name: t.milestone_name || '',

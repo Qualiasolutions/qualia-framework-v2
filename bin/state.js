@@ -5,6 +5,14 @@
 const fs = require("fs");
 const path = require("path");
 
+// Framework version stamped into tracking.json so the ERP can reason about
+// payload schema age. Read once at startup; falls back to "" if package.json
+// is unreachable (e.g. unit tests running state.js in isolation).
+let FRAMEWORK_VERSION = "";
+try {
+  FRAMEWORK_VERSION = require("../package.json").version || "";
+} catch {}
+
 const PLANNING = ".planning";
 const STATE_FILE = path.join(PLANNING, "STATE.md");
 const TRACKING_FILE = path.join(PLANNING, "tracking.json");
@@ -195,6 +203,8 @@ function ensureLifetime(t) {
   if (typeof t.milestone_name !== "string") t.milestone_name = "";
   if (!Array.isArray(t.milestones)) t.milestones = [];
   if (typeof t.report_seq !== "number") t.report_seq = 0;
+  if (typeof t.client_id !== "string") t.client_id = "";
+  if (typeof t.framework_version !== "string") t.framework_version = "";
   if (!t.lifetime || typeof t.lifetime !== "object") {
     t.lifetime = {
       tasks_completed: 0,
@@ -813,11 +823,13 @@ function cmdInit(opts) {
   const t = {
     project: opts.project,
     client: opts.client || (prevLife ? prevLife.client : ""),
+    client_id: opts.client_id || (prevLife ? prevLife.client_id || "" : ""),
     type: opts.type || (prevLife ? prevLife.type : ""),
     assigned_to: opts.assigned_to || (prevLife ? prevLife.assigned_to : ""),
     team_id: opts.team_id || (prevLife ? prevLife.team_id || "" : ""),
     project_id: opts.project_id || (prevLife ? prevLife.project_id || "" : ""),
     git_remote: opts.git_remote || (prevLife ? prevLife.git_remote || "" : ""),
+    framework_version: FRAMEWORK_VERSION,
     milestone: prevLife ? prevLife.milestone : 1,
     milestone_name: opts.milestone_name || (prevLife ? prevLife.milestone_name || "" : ""),
     milestones: prevMilestones,

@@ -1,11 +1,13 @@
 {
   "project": "",
   "client": "",
+  "client_id": "",
   "type": "",
   "assigned_to": "",
   "team_id": "",
   "project_id": "",
   "git_remote": "",
+  "framework_version": "",
   "milestone": 1,
   "milestone_name": "",
   "milestones": [],
