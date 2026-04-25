@@ -153,8 +153,20 @@ try {
   } catch {}
 } catch {}
 
+// ─── Pill-style badge helper ─────────────────────────────
+// Renders text as an inline pill with a solid background color, similar to
+// Claude Code's native worktree tag. Pads with a leading+trailing space so
+// the background band has visual weight.
+function pill(text, rgb) {
+  const [r, g, b] = rgb;
+  const bg = `\x1b[48;2;${r};${g};${b}m`;
+  const fg = `\x1b[38;2;240;250;255m`;
+  const bold = `\x1b[1m`;
+  return `${bg}${fg}${bold} ${text} ${RESET}`;
+}
+
 // ─── Phase info from .planning/tracking.json ─────────────
-// Shows: [M{n}·{milestoneName}] P{phase}/{total} T{done}/{total} {status} [!{blockers}]
+// Rendered as a pill at the start of line 1 — teal for normal, red when blockers > 0.
 // Every segment is optional — missing data is skipped, never rendered as a placeholder.
 let PHASE_INFO = "";
 try {
@@ -172,39 +184,42 @@ try {
 
     const parts = [];
 
-    // Milestone: M{n}·{shortName}   (short name trimmed to 14 chars)
     if (milestone > 0) {
       let mStr = `M${milestone}`;
       if (milestoneName) {
         const shortName = milestoneName.length > 14 ? milestoneName.slice(0, 13) + "…" : milestoneName;
-        mStr += `${DIM}·${RESET}${TEAL_GLOW}${shortName}`;
+        mStr += `·${shortName}`;
       }
-      parts.push(`${TEAL}${mStr}${RESET}`);
+      parts.push(mStr);
     }
 
-    // Phase: P{phase}/{total}
-    if (total > 0) {
-      parts.push(`${WHITE}P${phase}/${total}${RESET}`);
-    }
+    if (total > 0) parts.push(`P${phase}/${total}`);
+    if (tasksTotal > 0) parts.push(`T${tasksDone}/${tasksTotal}`);
+    if (status) parts.push(status);
 
-    // Tasks within phase: T{done}/{total}
-    if (tasksTotal > 0) {
-      parts.push(`${DIM}T${RESET}${WHITE}${tasksDone}/${tasksTotal}${RESET}`);
-    }
+    let badgeText = parts.join(" · ");
+    if (blockers > 0) badgeText += badgeText ? ` · !${blockers}` : `!${blockers}`;
 
-    // Status
-    if (status) {
-      parts.push(`${TEAL_GLOW}${status}${RESET}`);
+    if (badgeText) {
+      // Red pill when blockers present, teal otherwise
+      const bg = blockers > 0 ? [153, 27, 27] : [0, 130, 135];
+      PHASE_INFO = pill(`⬢ ${badgeText}`, bg);
     }
+  }
+} catch {}
 
-    // Blockers — red badge, only when > 0
-    if (blockers > 0) {
-      parts.push(`${RED}!${blockers}${RESET}`);
-    }
-
-    if (parts.length > 0) {
-      PHASE_INFO = parts.join(` ${DIM}·${RESET} `);
-    }
+// ─── Framework-dev badge ────────────────────────────────
+// When editing the Qualia framework itself (detected by presence of the
+// skills/ dir + qualia-ui.js), show a FRAMEWORK DEV pill even though
+// there's no tracking.json. Gives the same "you're in Qualia mode" signal
+// during framework work.
+let FRAMEWORK_BADGE = "";
+try {
+  const isFramework =
+    fs.existsSync(path.join(DIR, "skills", "qualia-plan", "SKILL.md")) &&
+    fs.existsSync(path.join(DIR, "bin", "qualia-ui.js"));
+  if (isFramework) {
+    FRAMEWORK_BADGE = pill("⬢ FRAMEWORK DEV", [120, 60, 140]);
   }
 } catch {}
 
@@ -254,11 +269,14 @@ try {
   COST_FMT = `$${COST.toFixed(2)}`;
 } catch {}
 
-// ─── Line 1: Project + Git + Agent + Worktree + Phase + Memory + Hooks ──
+// ─── Line 1: Pill badge + Project + Git + Agent + Worktree + Memory + Identity ──
+// Leading pill (phase info or framework-dev) — one of these at most, phase wins.
 let LINE1 = "";
 try {
   const dirBase = path.basename(DIR) || DIR;
-  LINE1 = `${TEAL}⬢${RESET} ${WHITE}${dirBase}${RESET}`;
+  const leadingBadge = PHASE_INFO || FRAMEWORK_BADGE;
+  if (leadingBadge) LINE1 += `${leadingBadge} `;
+  LINE1 += `${TEAL}⬢${RESET} ${WHITE}${dirBase}${RESET}`;
   if (BRANCH) {
     if (CHANGES > 0) {
       LINE1 += ` ${DIM}on${RESET} ${TEAL_GLOW}${BRANCH}${RESET} ${YELLOW}~${CHANGES}${RESET}`;
@@ -268,12 +286,9 @@ try {
   }
   if (AGENT) LINE1 += ` ${DIM}│${RESET} ${TEAL}⚡${AGENT}${RESET}`;
   if (WORKTREE) LINE1 += ` ${DIM}│${RESET} ${TEAL_DIM}⎇ ${WORKTREE}${RESET}`;
-  if (PHASE_INFO) LINE1 += ` ${DIM}│${RESET} ${PHASE_INFO}`;
-  // Memory — the one context indicator that's actually project-specific
   if (MEMORY_COUNT > 0) {
     LINE1 += ` ${DIM}│${RESET} ${DIM}mem${RESET} ${TEAL}${MEMORY_COUNT}${RESET}`;
   }
-  // Qualia member signature — end of line 1 so it sits above line 2's model info
   if (QUALIA_FIRST_NAME) {
     LINE1 += ` ${DIM}│${RESET} ${TEAL}⬢${RESET} ${TEAL_GLOW}Qualia member${RESET}${DIM}:${RESET} ${WHITE}${QUALIA_FIRST_NAME}${RESET}`;
   }

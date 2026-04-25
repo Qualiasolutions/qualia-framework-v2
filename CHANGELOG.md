@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [4.1.1] — 2026-04-22
 
-**Critical silent-fail hotfix.** Follow-up to the v4.1.0 audit (`FRAMEWORK_REVIEW.html`) which surfaced 142 findings across 4 dimensions. This release addresses the 5 highest-risk issues — each one previously let an operation fail silently or skip safety checks without telling the user. Subsequent releases (v4.2.0 structural, v4.3.0 harness patterns) will handle the remaining findings.
+**Critical silent-fail hotfix.** Follow-up to the v4.1.0 audit (`docs/reviews/v4.1.0-audit.html`) which surfaced 142 findings across 4 dimensions. This release addresses the 5 highest-risk issues — each one previously let an operation fail silently or skip safety checks without telling the user. Subsequent releases (v4.2.0 structural, v4.3.0 harness patterns) will handle the remaining findings.
 
 ### Fixed
 
