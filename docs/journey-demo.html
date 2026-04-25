@@ -1,0 +1,1008 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Qualia Framework — A Project's Journey</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #04060a;
+    --bg-2: #080c12;
+    --surface: #0d1218;
+    --surface-2: #131a22;
+    --line: #1c232c;
+    --line-strong: #2a333d;
+    --ink: #eaeff5;
+    --ink-soft: #b4bec9;
+    --ink-mute: #6e7886;
+    --brand: #00ced9;
+    --brand-2: #5de3eb;
+    --accent: #ffbf5e;
+    --violet: #a58bff;
+    --ok: #6ee7a8;
+    --ease-std: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-dec: cubic-bezier(0, 0, 0.2, 1);
+    --ease-sp:  cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+    min-height: 100vh;
+  }
+
+  /* ambient */
+  body::before {
+    content: "";
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(1400px 800px at 75% -15%, rgba(0, 206, 217, 0.18), transparent 55%),
+      radial-gradient(1000px 700px at 15% 115%, rgba(165, 139, 255, 0.08), transparent 60%);
+    pointer-events: none; z-index: 0;
+  }
+  body::after {
+    content: "";
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: radial-gradient(ellipse at center, black 25%, transparent 85%);
+    pointer-events: none; z-index: 0;
+  }
+
+  h1, h2, h3 {
+    font-family: "Fraunces", Georgia, serif;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    margin: 0;
+  }
+
+  code.inline {
+    font-family: "JetBrains Mono", monospace;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    padding: 0.1em 0.45em;
+    border-radius: 4px;
+    color: var(--brand);
+    font-size: 0.88em;
+  }
+
+  .sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); }
+
+  /* layout */
+  .stage-wrap {
+    position: relative;
+    z-index: 1;
+    min-height: 100vh;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    padding: clamp(1rem, 3vw, 2rem) clamp(1rem, 4vw, 3rem);
+    gap: clamp(1rem, 2vw, 1.5rem);
+  }
+
+  /* HEADER BAR */
+  .top {
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .brand {
+    display: inline-flex; align-items: center; gap: 10px;
+    font-family: "Fraunces", serif; font-weight: 500;
+    color: var(--ink); text-decoration: none;
+    font-size: 1.05rem;
+    letter-spacing: -0.01em;
+  }
+  .brand-mark { color: var(--brand); display: grid; place-items: center; }
+  .project-chip {
+    display: inline-flex; align-items: center; gap: 0.6rem;
+    padding: 0.45rem 0.75rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.76rem;
+    color: var(--ink-soft);
+  }
+  .project-chip .pulse {
+    width: 8px; height: 8px; border-radius: 999px;
+    background: var(--brand);
+    box-shadow: 0 0 0 0 rgba(0,206,217,0.6);
+    animation: livePulse 1.8s infinite;
+  }
+  @keyframes livePulse {
+    0%   { box-shadow: 0 0 0 0 rgba(0,206,217,0.5); }
+    70%  { box-shadow: 0 0 0 10px rgba(0,206,217,0); }
+    100% { box-shadow: 0 0 0 0 rgba(0,206,217,0); }
+  }
+
+  /* MAIN STAGE */
+  .stage {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+    gap: 1.5rem;
+    align-items: start;
+  }
+  @media (min-width: 1040px) {
+    .stage { grid-template-columns: minmax(0, 1.6fr) minmax(320px, 1fr); grid-template-rows: 1fr; }
+  }
+
+  /* Title / narration column */
+  .narration {
+    display: flex; flex-direction: column; gap: 1rem;
+  }
+  .eyebrow {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.72rem;
+    color: var(--brand);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+  .eyebrow .chapter {
+    color: var(--ink-mute);
+    margin-left: 0.6rem;
+    letter-spacing: 0.1em;
+  }
+  h1.journey-title {
+    font-size: clamp(2rem, 1rem + 3.5vw, 4rem);
+    font-variation-settings: "opsz" 144;
+  }
+  h1.journey-title .accent {
+    color: var(--brand);
+    font-style: italic;
+    font-weight: 400;
+  }
+  .narration p {
+    color: var(--ink-soft);
+    font-size: clamp(0.95rem, 0.6rem + 0.4vw, 1.05rem);
+    max-width: 56ch;
+    line-height: 1.6;
+    margin: 0;
+    min-height: 3.2em;
+  }
+  .step-badge {
+    display: inline-flex; align-items: center; gap: 0.65rem;
+    padding: 0.4rem 0.75rem;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    border-radius: 8px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.8rem;
+    color: var(--ink);
+    width: fit-content;
+    transition: border-color 300ms;
+  }
+  .step-badge.live { border-color: var(--brand); color: var(--brand); }
+  .step-badge .tag { color: var(--ink-mute); }
+
+  /* Terminal (right column) */
+  .term {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 40px 80px -50px rgba(0, 206, 217, 0.3);
+    display: flex; flex-direction: column;
+    min-height: 280px;
+  }
+  .term-head {
+    display: flex; align-items: center; gap: 0.4rem;
+    padding: 10px 14px;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--line);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.74rem;
+    color: var(--ink-mute);
+  }
+  .term-dot { width: 9px; height: 9px; border-radius: 999px; }
+  .term-dot.r { background: #f87171; }
+  .term-dot.y { background: #ffbf5e; }
+  .term-dot.g { background: #6ee7a8; }
+  .term-title { margin-left: 0.45rem; }
+  .term-body {
+    padding: 1rem 1.2rem;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.78rem;
+    line-height: 1.75;
+    color: var(--ink-soft);
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+  }
+  .term-line { display: block; opacity: 0; transform: translateY(3px); }
+  .term-line.show { opacity: 1; transform: none; transition: opacity 280ms, transform 280ms; }
+  .t-prompt { color: var(--brand); }
+  .t-cmd    { color: var(--ink); }
+  .t-ok     { color: var(--ok); }
+  .t-warn   { color: var(--accent); }
+  .t-mute   { color: var(--ink-mute); }
+  .t-violet { color: var(--violet); }
+  .t-accent { color: var(--accent); }
+
+  /* JOURNEY TRACK (SVG) */
+  .track {
+    position: relative;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    background:
+      linear-gradient(180deg, var(--surface), var(--bg-2));
+    overflow: hidden;
+  }
+  .track svg {
+    display: block;
+    width: 100%;
+    height: clamp(320px, 44vh, 520px);
+  }
+  .track-footer {
+    border-top: 1px solid var(--line);
+    padding: 0.85rem 1.1rem;
+    display: flex; align-items: center; gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .progress-label {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.72rem;
+    color: var(--ink-mute);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    min-width: 90px;
+  }
+  .progress-bar {
+    flex: 1;
+    min-width: 160px;
+    height: 4px;
+    background: var(--line);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--brand), var(--brand-2));
+    width: 0%;
+    transition: width 600ms var(--ease-std);
+  }
+  .controls { display: inline-flex; gap: 0.4rem; }
+  .btn {
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    font: inherit;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.76rem;
+    padding: 0.45rem 0.8rem;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: border-color 150ms, color 150ms, transform 100ms;
+  }
+  .btn:hover { border-color: var(--brand); color: var(--brand); }
+  .btn:active { transform: scale(0.97); }
+  .btn[aria-pressed="true"] { border-color: var(--brand); color: var(--brand); background: rgba(0,206,217,0.08); }
+  .btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+  /* BOTTOM PANEL */
+  .bottom {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  @media (min-width: 840px) { .bottom { grid-template-columns: repeat(4, 1fr); } }
+  .stat {
+    border: 1px solid var(--line);
+    background: var(--surface);
+    border-radius: 10px;
+    padding: 0.85rem 1rem;
+    min-height: 78px;
+    display: flex; flex-direction: column; gap: 0.25rem;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 200ms;
+  }
+  .stat.live { border-color: var(--brand); }
+  .stat .k {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.68rem;
+    color: var(--ink-mute);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .stat .v {
+    font-family: "Fraunces", serif;
+    font-size: clamp(1.3rem, 0.7rem + 1vw, 1.75rem);
+    color: var(--ink);
+  }
+  .stat.live .v { color: var(--brand); }
+  .stat .hint {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.72rem;
+    color: var(--ink-mute);
+    margin-top: auto;
+  }
+
+  /* SVG stage elements */
+  .station .ring {
+    fill: none;
+    stroke: var(--line-strong);
+    stroke-width: 1.4;
+    transition: stroke 400ms, stroke-width 400ms;
+  }
+  .station .core {
+    fill: var(--surface-2);
+    stroke: var(--line-strong);
+    stroke-width: 1.5;
+    transition: fill 400ms, stroke 400ms;
+  }
+  .station.passed .ring { stroke: var(--ok); opacity: 0.5; }
+  .station.passed .core { fill: rgba(110,231,168,0.15); stroke: var(--ok); }
+  .station.active .ring { stroke: var(--brand); stroke-width: 2; }
+  .station.active .core { fill: rgba(0,206,217,0.2); stroke: var(--brand); }
+  .station .label {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    fill: var(--ink-mute);
+    text-anchor: middle;
+    letter-spacing: 0.1em;
+    transition: fill 400ms;
+  }
+  .station.active .label { fill: var(--brand); }
+  .station.passed .label { fill: var(--ok); opacity: 0.7; }
+  .station .cmd {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-size: 11px;
+    fill: var(--ink-soft);
+    text-anchor: middle;
+    font-weight: 500;
+    transition: fill 400ms;
+  }
+  .station.active .cmd { fill: var(--ink); }
+
+  /* floating agent orbs */
+  .orb {
+    transform-origin: center;
+  }
+  .orb .body {
+    fill: var(--surface-2);
+    stroke: var(--brand);
+    stroke-width: 1.4;
+    filter: drop-shadow(0 0 10px rgba(0,206,217,0.35));
+  }
+  .orb .lbl {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 9px;
+    fill: var(--brand);
+    text-anchor: middle;
+  }
+  .orb-fade-in { animation: orbIn 500ms var(--ease-sp) both; }
+  .orb-fade-out { animation: orbOut 400ms var(--ease-std) both; }
+  @keyframes orbIn  { from { opacity: 0; transform: scale(0.3); } to { opacity: 1; transform: scale(1); } }
+  @keyframes orbOut { to   { opacity: 0; transform: scale(0.3); } }
+
+  /* footer */
+  footer {
+    position: relative; z-index: 1;
+    padding: 1.5rem clamp(1rem, 4vw, 3rem);
+    color: var(--ink-mute);
+    font-size: 0.82rem;
+    text-align: center;
+    border-top: 1px solid var(--line);
+  }
+
+  /* reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="stage-wrap">
+  <!-- HEADER -->
+  <header class="top">
+    <a class="brand" href="#">
+      <span class="brand-mark" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 2 3 7v10l9 5 9-5V7z"/></svg>
+      </span>
+      Qualia Framework · a project's journey
+    </a>
+    <span class="project-chip" aria-live="polite">
+      <span class="pulse" aria-hidden="true"></span>
+      <span id="projectName">sakani-app</span>
+      <span style="color:var(--ink-mute)">·</span>
+      <span id="milestoneName">Foundation</span>
+    </span>
+  </header>
+
+  <!-- STAGE -->
+  <section class="stage">
+    <!-- Narration + Track -->
+    <div class="narration">
+      <p class="eyebrow">The Road <span class="chapter" id="chapter">Chapter 1 / 8</span></p>
+      <h1 class="journey-title"><span id="titleMain">Kickoff</span> <span class="accent" id="titleSub">— research &amp; roadmap</span></h1>
+      <p id="narrationBody">A new client project begins with <code class="inline">/qualia-new</code>. Four researcher subagents spawn in parallel to study stack, features, architecture, and common pitfalls.</p>
+      <span class="step-badge live" id="stepBadge">
+        <span class="tag">step</span>
+        <span id="stepCmd">/qualia-new</span>
+      </span>
+
+      <!-- The main journey track (SVG) -->
+      <div class="track" aria-label="Journey animation">
+        <svg viewBox="0 0 1200 480" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <filter id="glow">
+              <feGaussianBlur stdDeviation="3.5" result="b"/>
+              <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+            <radialGradient id="tokenGrad">
+              <stop offset="0" stop-color="#5de3eb" stop-opacity="1"/>
+              <stop offset="0.6" stop-color="#00ced9" stop-opacity="0.9"/>
+              <stop offset="1" stop-color="#00ced9" stop-opacity="0"/>
+            </radialGradient>
+          </defs>
+
+          <!-- the winding road -->
+          <path id="journeyPath"
+            d="M 80 240
+               C 200 80, 320 80, 430 240
+               S 660 400, 770 240
+               S 1000 80, 1120 240"
+            fill="none"
+            stroke="#1c232c"
+            stroke-width="3"
+            stroke-linecap="round"/>
+
+          <!-- completed highlight -->
+          <path id="journeyDone"
+            d="M 80 240
+               C 200 80, 320 80, 430 240
+               S 660 400, 770 240
+               S 1000 80, 1120 240"
+            fill="none"
+            stroke="#00ced9"
+            stroke-width="3"
+            stroke-linecap="round"
+            stroke-dasharray="0 3000"
+            opacity="0.9"/>
+
+          <!-- stations placed via JS -->
+          <g id="stationsGroup"></g>
+
+          <!-- orbs spawned at current station -->
+          <g id="orbLayer"></g>
+
+          <!-- particles along the path -->
+          <g id="particleLayer"></g>
+
+          <!-- the PROJECT TOKEN that travels -->
+          <g id="projectToken" transform="translate(80 240)">
+            <circle r="28" fill="url(#tokenGrad)" opacity="0.5"/>
+            <circle r="14" fill="#05070a" stroke="#00ced9" stroke-width="1.5" filter="url(#glow)"/>
+            <text y="4" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#00ced9" font-weight="600">PRJ</text>
+          </g>
+        </svg>
+
+        <div class="track-footer">
+          <span class="progress-label">Progress</span>
+          <div class="progress-bar" aria-hidden="true"><div class="progress-fill" id="progressFill"></div></div>
+          <span class="progress-label" id="progressPct">0%</span>
+          <span class="controls">
+            <button class="btn" id="playBtn" aria-pressed="true">Pause</button>
+            <button class="btn" id="restartBtn">Restart</button>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live terminal -->
+    <aside class="term" aria-label="Live project trace">
+      <div class="term-head">
+        <span class="term-dot r"></span>
+        <span class="term-dot y"></span>
+        <span class="term-dot g"></span>
+        <span class="term-title">~/sakani-app · main</span>
+      </div>
+      <div class="term-body" id="termBody" role="log" aria-live="polite"></div>
+    </aside>
+  </section>
+
+  <!-- BOTTOM STATS -->
+  <section class="bottom" aria-label="Live stats">
+    <div class="stat" id="stat-phase">
+      <span class="k">Current Phase</span>
+      <span class="v" id="phaseV">—</span>
+      <span class="hint" id="phaseH">waiting to start</span>
+    </div>
+    <div class="stat" id="stat-agents">
+      <span class="k">Agents Active</span>
+      <span class="v" id="agentsV">0</span>
+      <span class="hint" id="agentsH">no subagents running</span>
+    </div>
+    <div class="stat" id="stat-tasks">
+      <span class="k">Tasks Completed</span>
+      <span class="v" id="tasksV">0 <span style="color:var(--ink-mute); font-size: 0.7em;">/ 4</span></span>
+      <span class="hint" id="tasksH">phase not yet started</span>
+    </div>
+    <div class="stat" id="stat-gate">
+      <span class="k">Quality Gates</span>
+      <span class="v" id="gateV">—</span>
+      <span class="hint" id="gateH">pending</span>
+    </div>
+  </section>
+</div>
+
+<footer>
+  one project · one journey · fresh context per agent
+</footer>
+
+<script>
+(() => {
+  'use strict';
+
+  const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const SVGNS = 'http://www.w3.org/2000/svg';
+
+  // ==========================================================
+  // Stations along the journey path (t = 0..1)
+  // ==========================================================
+  const stations = [
+    { id: 'new',       t: 0.03, label: 'KICKOFF',    cmd: '/qualia-new',       title: 'Kickoff',     sub: '— research & roadmap' },
+    { id: 'plan',      t: 0.14, label: 'PLAN',       cmd: '/qualia-plan',      title: 'Plan',        sub: '— phase plan + contracts' },
+    { id: 'build',     t: 0.30, label: 'BUILD',      cmd: '/qualia-build',     title: 'Build',       sub: '— wave-based parallel work' },
+    { id: 'verify',    t: 0.46, label: 'VERIFY',     cmd: '/qualia-verify',    title: 'Verify',      sub: '— goal-backward check' },
+    { id: 'milestone', t: 0.59, label: 'MILESTONE',  cmd: '/qualia-milestone', title: 'Milestone',   sub: '— close & open next' },
+    { id: 'polish',    t: 0.72, label: 'POLISH',     cmd: '/qualia-polish',    title: 'Polish',      sub: '— design & UX pass' },
+    { id: 'ship',      t: 0.86, label: 'SHIP',       cmd: '/qualia-ship',      title: 'Ship',        sub: '— gates + deploy + verify' },
+    { id: 'handoff',   t: 0.98, label: 'HANDOFF',    cmd: '/qualia-handoff',   title: 'Handoff',     sub: '— four deliverables' },
+  ];
+
+  // ==========================================================
+  // Narration per chapter
+  // ==========================================================
+  const chapters = {
+    new:       'A new client project begins with `/qualia-new`. Four researcher subagents spawn in parallel — they study stack, features, architecture, and common pitfalls — then synthesise a JOURNEY.md.',
+    plan:      'For each phase, `/qualia-plan` runs a planner agent with a plan-checker in a revision loop. Tasks get specificity, waves, and a verification contract.',
+    build:     'Builders spawn one-per-task, in waves. Independent tasks run at the same time. Each builder gets only its task + PROJECT.md — a fresh context, every time.',
+    verify:    'A fresh verifier agent checks the phase against its goal — not just whether tasks ran, but whether the thing actually works.',
+    milestone: 'The milestone closes at a human gate. Artifacts archive, requirements flip to complete, and the next milestone opens from JOURNEY.md.',
+    polish:    'The last milestone is Handoff. First: polish. One sweep across responsive, accessible, motion, copy, and edge-case states.',
+    ship:      'Quality gates run: tsc, lint, build, tests. If all pass, the project deploys to production — then a 5-check post-deploy verification.',
+    handoff:   'Four deliverables: production URL, client documentation, credentials & assets archive, ERP finalization. The project is done.',
+  };
+
+  // ==========================================================
+  // Terminal events per chapter
+  // ==========================================================
+  const termEvents = {
+    new: [
+      { t: 100,  html: '<span class="t-prompt">›</span> <span class="t-cmd">/qualia-new</span> <span class="t-mute">--auto</span>' },
+      { t: 400,  html: '<span class="t-mute">spawning 4 researchers in parallel…</span>' },
+      { t: 750,  html: '<span class="t-mute">  ├─ stack         · Context7</span>' },
+      { t: 900,  html: '<span class="t-mute">  ├─ features      · WebSearch</span>' },
+      { t: 1050, html: '<span class="t-mute">  ├─ architecture</span>' },
+      { t: 1200, html: '<span class="t-mute">  └─ pitfalls</span>' },
+      { t: 2400, html: '<span class="t-ok">✓</span> research synthesised → <span class="t-accent">SUMMARY.md</span>' },
+      { t: 2800, html: '<span class="t-violet">→</span> roadmapper · <span class="t-accent">JOURNEY.md</span> (5 milestones)' },
+    ],
+    plan: [
+      { t: 100,  html: '<span class="t-prompt">›</span> <span class="t-cmd">/qualia-plan</span>' },
+      { t: 400,  html: '<span class="t-mute">planner: drafting 4 tasks, 2 waves…</span>' },
+      { t: 1100, html: '<span class="t-mute">plan-checker: validating…</span>' },
+      { t: 1800, html: '<span class="t-warn">✗</span> <span class="t-mute">task 3 missing verification contract</span>' },
+      { t: 2200, html: '<span class="t-mute">revision 1/3 — planner revises task 3</span>' },
+      { t: 3000, html: '<span class="t-ok">✓</span> plan validated · PHASE_PLAN.md' },
+    ],
+    build: [
+      { t: 100,  html: '<span class="t-prompt">›</span> <span class="t-cmd">/qualia-build</span>' },
+      { t: 400,  html: '<span class="t-mute">wave 1 — 2 builders in parallel</span>' },
+      { t: 900,  html: '<span class="t-mute">  ⧗ task 1: auth schema + RLS</span>' },
+      { t: 1050, html: '<span class="t-mute">  ⧗ task 2: login page + form</span>' },
+      { t: 2100, html: '  <span class="t-ok">✓</span> task 1 committed <span class="t-mute">a1b2c3d</span>' },
+      { t: 2300, html: '  <span class="t-ok">✓</span> task 2 committed <span class="t-mute">e4f5a6b</span>' },
+      { t: 2600, html: '<span class="t-mute">wave 2 — 2 builders in parallel</span>' },
+      { t: 3700, html: '  <span class="t-ok">✓</span> task 3 committed <span class="t-mute">7c8d9e0</span>' },
+      { t: 3900, html: '  <span class="t-ok">✓</span> task 4 committed <span class="t-mute">f1e2d3c</span>' },
+    ],
+    verify: [
+      { t: 100,  html: '<span class="t-prompt">›</span> <span class="t-cmd">/qualia-verify</span>' },
+      { t: 500,  html: '<span class="t-mute">verifier: loading success criteria…</span>' },
+      { t: 1100, html: '  <span class="t-ok">✓</span> sign-in happy path' },
+      { t: 1400, html: '  <span class="t-ok">✓</span> session persists across refresh' },
+      { t: 1700, html: '  <span class="t-ok">✓</span> RLS denies unauthenticated reads' },
+      { t: 2000, html: '  <span class="t-ok">✓</span> <span class="t-mute">npx tsc --noEmit clean</span>' },
+      { t: 2400, html: '<span class="t-ok">✓</span> goal met — phase verified' },
+    ],
+    milestone: [
+      { t: 100,  html: '<span class="t-prompt">›</span> <span class="t-cmd">/qualia-milestone</span>' },
+      { t: 500,  html: '<span class="t-mute">archiving artifacts of M1 · Foundation…</span>' },
+      { t: 1100, html: '<span class="t-ok">✓</span> requirements marked complete' },
+      { t: 1500, html: '<span class="t-violet">→</span> opening M2 · <span class="t-accent">Core Features</span>' },
+    ],
+    polish: [
+      { t: 100,  html: '<span class="t-prompt">›</span> <span class="t-cmd">/qualia-polish</span>' },
+      { t: 500,  html: '<span class="t-mute">scanning: responsive, a11y, motion, copy…</span>' },
+      { t: 1200, html: '  <span class="t-ok">✓</span> 44px touch targets' },
+      { t: 1500, html: '  <span class="t-ok">✓</span> reduced-motion honored' },
+      { t: 1800, html: '  <span class="t-ok">✓</span> empty / error / loading states' },
+      { t: 2200, html: '<span class="t-ok">✓</span> polish complete' },
+    ],
+    ship: [
+      { t: 100,  html: '<span class="t-prompt">›</span> <span class="t-cmd">/qualia-ship</span>' },
+      { t: 500,  html: '<span class="t-mute">gates:</span>' },
+      { t: 800,  html: '  <span class="t-ok">✓</span> tsc   &nbsp;<span class="t-ok">✓</span> lint' },
+      { t: 1050, html: '  <span class="t-ok">✓</span> build &nbsp;<span class="t-ok">✓</span> tests' },
+      { t: 1400, html: '<span class="t-mute">vercel --prod …</span>' },
+      { t: 2400, html: '<span class="t-ok">✓</span> live · <span class="t-accent">https://sakani.app</span>' },
+      { t: 2700, html: '<span class="t-ok">✓</span> 5-check post-deploy verification' },
+    ],
+    handoff: [
+      { t: 100,  html: '<span class="t-prompt">›</span> <span class="t-cmd">/qualia-handoff</span>' },
+      { t: 500,  html: '  <span class="t-ok">✓</span> production URL' },
+      { t: 800,  html: '  <span class="t-ok">✓</span> client documentation' },
+      { t: 1100, html: '  <span class="t-ok">✓</span> credentials &amp; assets' },
+      { t: 1400, html: '  <span class="t-ok">✓</span> ERP finalization' },
+      { t: 1800, html: '<span class="t-ok">✓</span> <span class="t-accent">project delivered.</span>' },
+    ],
+  };
+
+  // ==========================================================
+  // Per-chapter visual actions (orbs, particles, stats)
+  // ==========================================================
+  const chapterVisuals = {
+    new: {
+      milestone: 'Foundation',
+      phase: 'Kickoff',
+      phaseHint: 'research running',
+      gate: 'n/a',
+      gateHint: 'pre-plan',
+      orbs: [
+        { name: 'stack',        dx: -70, dy: -55 },
+        { name: 'features',     dx:  70, dy: -55 },
+        { name: 'architecture', dx: -70, dy:  55 },
+        { name: 'pitfalls',     dx:  70, dy:  55 },
+      ],
+      taskMax: 0, tasksDone: 0,
+    },
+    plan: {
+      milestone: 'Foundation',
+      phase: 'Phase 1 · Auth',
+      phaseHint: 'planning tasks',
+      gate: 'plan-checker',
+      gateHint: 'validating plan',
+      orbs: [
+        { name: 'planner',       dx: -55, dy: 0 },
+        { name: 'plan-checker',  dx:  55, dy: 0 },
+      ],
+      taskMax: 4, tasksDone: 0,
+    },
+    build: {
+      milestone: 'Foundation',
+      phase: 'Phase 1 · Auth',
+      phaseHint: 'building in waves',
+      gate: 'frontend-guard',
+      gateHint: 'reading DESIGN.md',
+      orbs: [
+        { name: 'build-1', dx: -90, dy: -45 },
+        { name: 'build-2', dx: -30, dy: -45 },
+        { name: 'build-3', dx:  30, dy: -45 },
+        { name: 'build-4', dx:  90, dy: -45 },
+      ],
+      taskMax: 4, tasksDone: 4, taskReveal: true,
+    },
+    verify: {
+      milestone: 'Foundation',
+      phase: 'Phase 1 · Auth',
+      phaseHint: 'goal-backward check',
+      gate: 'verification',
+      gateHint: 'spawning QA browser',
+      orbs: [
+        { name: 'verifier',   dx: -55, dy: 0 },
+        { name: 'qa-browser', dx:  55, dy: 0 },
+      ],
+      taskMax: 4, tasksDone: 4,
+    },
+    milestone: {
+      milestone: 'Core Features',
+      phase: 'Milestone boundary',
+      phaseHint: 'human gate — approved',
+      gate: 'gate passed',
+      gateHint: 'M1 → M2',
+      orbs: [],
+      taskMax: 0, tasksDone: 0,
+    },
+    polish: {
+      milestone: 'Handoff',
+      phase: 'Phase 1 · Polish',
+      phaseHint: 'design & UX sweep',
+      gate: 'design-guard',
+      gateHint: 'responsive + a11y',
+      orbs: [
+        { name: 'polish-1', dx: -40, dy: 0 },
+        { name: 'polish-2', dx:  40, dy: 0 },
+      ],
+      taskMax: 3, tasksDone: 3,
+    },
+    ship: {
+      milestone: 'Handoff',
+      phase: 'Phase 3 · Ship',
+      phaseHint: 'deploying to prod',
+      gate: 'deploy-guard',
+      gateHint: 'tsc · lint · build · tests',
+      orbs: [
+        { name: 'gates',    dx: -55, dy: 0 },
+        { name: 'deploy',   dx:  55, dy: 0 },
+      ],
+      taskMax: 5, tasksDone: 5,
+    },
+    handoff: {
+      milestone: 'Delivered',
+      phase: 'Complete',
+      phaseHint: 'project delivered',
+      gate: 'all passed',
+      gateHint: '4/4 deliverables',
+      orbs: [],
+      taskMax: 4, tasksDone: 4,
+    },
+  };
+
+  // ==========================================================
+  // DOM + SVG setup
+  // ==========================================================
+  const journeyPath = document.getElementById('journeyPath');
+  const journeyDone = document.getElementById('journeyDone');
+  const totalLen = journeyPath.getTotalLength();
+  journeyDone.style.transition = 'stroke-dasharray 1200ms ' + 'cubic-bezier(0.4, 0, 0.2, 1)';
+
+  const stationsGroup = document.getElementById('stationsGroup');
+  stations.forEach((s, i) => {
+    const pt = journeyPath.getPointAtLength(totalLen * s.t);
+    const g = document.createElementNS(SVGNS, 'g');
+    g.setAttribute('class', 'station');
+    g.setAttribute('id', 'st-' + s.id);
+    g.setAttribute('transform', `translate(${pt.x} ${pt.y})`);
+    g.innerHTML = `
+      <circle class="ring" r="18"/>
+      <circle class="core" r="8"/>
+      <text class="label" y="-28">${s.label}</text>
+      <text class="cmd" y="38">${s.cmd}</text>
+    `;
+    stationsGroup.appendChild(g);
+    s._pt = pt;
+  });
+
+  const projectToken = document.getElementById('projectToken');
+  const orbLayer = document.getElementById('orbLayer');
+  const particleLayer = document.getElementById('particleLayer');
+
+  // ==========================================================
+  // Movers / helpers
+  // ==========================================================
+  let tokenAnim = null;
+  function moveTokenTo(x, y, dur) {
+    if (tokenAnim) cancelAnimationFrame(tokenAnim);
+    const startTransform = projectToken.getAttribute('transform') || 'translate(80 240)';
+    const m = startTransform.match(/translate\(([-\d.]+)\s+([-\d.]+)\)/);
+    const sx = m ? parseFloat(m[1]) : 80;
+    const sy = m ? parseFloat(m[2]) : 240;
+    const start = performance.now();
+    const d = prefersReduced ? 0 : dur;
+    function tick(now) {
+      const k = Math.min(1, (now - start) / Math.max(d, 1));
+      const e = 1 - Math.pow(1 - k, 3); // easeOutCubic
+      const x1 = sx + (x - sx) * e;
+      const y1 = sy + (y - sy) * e;
+      projectToken.setAttribute('transform', `translate(${x1} ${y1})`);
+      if (k < 1) tokenAnim = requestAnimationFrame(tick);
+    }
+    tokenAnim = requestAnimationFrame(tick);
+  }
+
+  function clearOrbs() {
+    [...orbLayer.children].forEach(c => {
+      c.classList.add('orb-fade-out');
+      setTimeout(() => c.remove(), 400);
+    });
+  }
+  function spawnOrbs(cx, cy, defs) {
+    defs.forEach((o, i) => {
+      setTimeout(() => {
+        const g = document.createElementNS(SVGNS, 'g');
+        g.setAttribute('class', 'orb orb-fade-in');
+        g.setAttribute('transform', `translate(${cx + o.dx} ${cy + o.dy})`);
+        g.innerHTML = `
+          <circle class="body" r="14"/>
+          <text class="lbl" y="3">${o.name}</text>
+        `;
+        orbLayer.appendChild(g);
+      }, i * (prefersReduced ? 0 : 130));
+    });
+  }
+
+  function spawnParticles(fromX, fromY, count) {
+    if (prefersReduced) return;
+    for (let i = 0; i < count; i++) {
+      setTimeout(() => {
+        const c = document.createElementNS(SVGNS, 'circle');
+        c.setAttribute('r', 2.5);
+        c.setAttribute('cx', fromX);
+        c.setAttribute('cy', fromY);
+        c.setAttribute('fill', '#00ced9');
+        c.setAttribute('filter', 'url(#glow)');
+        particleLayer.appendChild(c);
+        const ang = Math.random() * Math.PI * 2;
+        const dist = 40 + Math.random() * 70;
+        const start = performance.now();
+        const dur = 900 + Math.random() * 500;
+        function tick(now) {
+          const k = (now - start) / dur;
+          if (k >= 1) { c.remove(); return; }
+          const e = 1 - Math.pow(1 - k, 2);
+          c.setAttribute('cx', fromX + Math.cos(ang) * dist * e);
+          c.setAttribute('cy', fromY + Math.sin(ang) * dist * e);
+          c.setAttribute('opacity', 1 - k);
+          requestAnimationFrame(tick);
+        }
+        requestAnimationFrame(tick);
+      }, i * 60);
+    }
+  }
+
+  function updateHighlight(t) {
+    const len = totalLen * t;
+    journeyDone.setAttribute('stroke-dasharray', `${len} ${totalLen}`);
+  }
+
+  // ==========================================================
+  // Terminal
+  // ==========================================================
+  const termBody = document.getElementById('termBody');
+  let termTimers = [];
+  function termClear() {
+    termTimers.forEach(clearTimeout); termTimers = [];
+    termBody.innerHTML = '';
+  }
+  function termPush(html) {
+    const s = document.createElement('span');
+    s.className = 'term-line';
+    s.innerHTML = html;
+    termBody.appendChild(s);
+    requestAnimationFrame(() => s.classList.add('show'));
+    while (termBody.children.length > 11) termBody.firstChild.remove();
+  }
+  function termPlay(events) {
+    termClear();
+    events.forEach(e => {
+      termTimers.push(setTimeout(() => termPush(e.html), prefersReduced ? 0 : e.t));
+    });
+  }
+
+  // ==========================================================
+  // Stats panel
+  // ==========================================================
+  function setStats(v) {
+    document.getElementById('phaseV').textContent  = v.phase;
+    document.getElementById('phaseH').textContent  = v.phaseHint;
+    document.getElementById('agentsV').textContent = v.orbs.length;
+    document.getElementById('agentsH').textContent = v.orbs.length ? v.orbs.map(o => o.name).slice(0, 3).join(' · ') + (v.orbs.length > 3 ? ` +${v.orbs.length - 3}` : '') : 'no subagents running';
+    document.getElementById('tasksV').innerHTML    = `${v.tasksDone} <span style="color:var(--ink-mute); font-size: 0.7em;">/ ${v.taskMax || '—'}</span>`;
+    document.getElementById('tasksH').textContent  = v.taskMax ? (v.tasksDone === v.taskMax ? 'phase complete' : 'in progress') : 'no tasks yet';
+    document.getElementById('gateV').textContent   = v.gate;
+    document.getElementById('gateH').textContent   = v.gateHint;
+
+    [...document.querySelectorAll('.stat')].forEach(s => s.classList.remove('live'));
+    if (v.orbs.length) document.getElementById('stat-agents').classList.add('live');
+    if (v.taskMax && v.tasksDone < v.taskMax) document.getElementById('stat-tasks').classList.add('live');
+    document.getElementById('stat-phase').classList.add('live');
+  }
+
+  // ==========================================================
+  // Main journey loop
+  // ==========================================================
+  let currentIdx = 0;
+  let playing = true;
+  let chapterTimer = null;
+
+  function goToChapter(i) {
+    currentIdx = i;
+    const s = stations[i];
+    const v = chapterVisuals[s.id];
+
+    // station states
+    document.querySelectorAll('.station').forEach((el, idx) => {
+      el.classList.remove('active', 'passed');
+      if (idx < i) el.classList.add('passed');
+      if (idx === i) el.classList.add('active');
+    });
+
+    // highlight + token
+    updateHighlight(s.t);
+    moveTokenTo(s._pt.x, s._pt.y, 1200);
+
+    // narration
+    document.getElementById('chapter').textContent = `Chapter ${i + 1} / ${stations.length}`;
+    document.getElementById('titleMain').textContent = s.title;
+    document.getElementById('titleSub').textContent = s.sub;
+    document.getElementById('narrationBody').innerHTML = chapters[s.id].replace(/`([^`]+)`/g, '<code class="inline">$1</code>');
+    document.getElementById('stepCmd').textContent = s.cmd;
+
+    // project chip milestone
+    document.getElementById('milestoneName').textContent = v.milestone;
+
+    // progress bar
+    const pct = Math.round(((i + 1) / stations.length) * 100);
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('progressPct').textContent = pct + '%';
+
+    // orbs + particles (after token arrives)
+    setTimeout(() => {
+      clearOrbs();
+      setTimeout(() => {
+        if (v.orbs.length) spawnOrbs(s._pt.x, s._pt.y, v.orbs);
+        spawnParticles(s._pt.x, s._pt.y, v.orbs.length ? 6 : 3);
+      }, 300);
+    }, prefersReduced ? 0 : 900);
+
+    // stats
+    setStats(v);
+
+    // terminal
+    termPlay(termEvents[s.id] || []);
+  }
+
+  function nextChapter() {
+    goToChapter((currentIdx + 1) % stations.length);
+  }
+
+  function startLoop() {
+    stopLoop();
+    // duration per chapter
+    chapterTimer = setInterval(nextChapter, 5200);
+    playing = true;
+    const btn = document.getElementById('playBtn');
+    btn.setAttribute('aria-pressed', 'true');
+    btn.textContent = 'Pause';
+  }
+  function stopLoop() {
+    if (chapterTimer) clearInterval(chapterTimer);
+    chapterTimer = null;
+    playing = false;
+    const btn = document.getElementById('playBtn');
+    btn.setAttribute('aria-pressed', 'false');
+    btn.textContent = 'Play';
+  }
+
+  document.getElementById('playBtn').addEventListener('click', () => {
+    if (playing) stopLoop(); else startLoop();
+  });
+  document.getElementById('restartBtn').addEventListener('click', () => {
+    stopLoop();
+    goToChapter(0);
+    startLoop();
+  });
+
+  // kick it off
+  goToChapter(0);
+  if (prefersReduced) {
+    // play once to the end, no auto-loop
+    stopLoop();
+  } else {
+    startLoop();
+  }
+
+})();
+</script>
+</body>
+</html>

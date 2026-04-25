@@ -1,0 +1,1488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Qualia Framework v4.1.0 — Production Review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" />
+<style>
+  :root {
+    color-scheme: dark;
+    --brand: #00ced1;
+    --brand-dim: #008c91;
+    --brand-glow: rgba(0, 206, 209, 0.15);
+    --bg: #0a0d14;
+    --surface: #111621;
+    --surface-2: #161c2a;
+    --surface-3: #1d2536;
+    --border: #232b3d;
+    --border-hi: #2d3850;
+    --text: #e6eaf2;
+    --text-dim: #8892a6;
+    --text-mute: #5a6478;
+    --crit: #ef4444;
+    --high: #f59e0b;
+    --med: #60a5fa;
+    --low: #6b7280;
+    --pass: #10b981;
+    --content-w: min(1280px, 92vw);
+    --radius: 12px;
+    --radius-sm: 8px;
+    --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -20%, var(--brand-glow), transparent 60%),
+      radial-gradient(ellipse 60% 40% at 100% 100%, rgba(245, 158, 11, 0.05), transparent 60%);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  h1, h2, h3, h4 {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    color: var(--text);
+  }
+
+  code, pre, .mono {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.88em;
+  }
+
+  a { color: var(--brand); text-decoration: none; transition: opacity 150ms var(--ease); }
+  a:hover { opacity: 0.8; }
+
+  /* ============== LAYOUT ============== */
+
+  .wrap {
+    max-width: var(--content-w);
+    margin: 0 auto;
+    padding-inline: clamp(1rem, 4vw, 3rem);
+  }
+
+  /* ============== NAV ============== */
+
+  nav.topbar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: rgba(10, 13, 20, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .topbar-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-block: 0.75rem;
+    gap: 2rem;
+  }
+
+  .brand-lock {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 700;
+    font-size: 1.05rem;
+    letter-spacing: -0.01em;
+  }
+
+  .brand-mark {
+    width: 10px; height: 10px;
+    background: var(--brand);
+    transform: rotate(45deg);
+    box-shadow: 0 0 12px var(--brand-glow);
+  }
+
+  .brand-sep {
+    color: var(--text-mute);
+    font-weight: 400;
+  }
+
+  .brand-sub {
+    color: var(--text-dim);
+    font-weight: 500;
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 1.5rem;
+    list-style: none;
+    font-size: 0.85rem;
+  }
+
+  .nav-links a {
+    color: var(--text-dim);
+    transition: color 150ms var(--ease);
+  }
+
+  .nav-links a:hover { color: var(--brand); opacity: 1; }
+
+  @media (max-width: 780px) {
+    .nav-links { display: none; }
+  }
+
+  /* ============== HERO ============== */
+
+  .hero {
+    padding-block: clamp(3rem, 8vw, 5rem);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .hero-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.75rem;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 1.5rem;
+  }
+
+  .hero-tag::before {
+    content: '';
+    width: 6px; height: 6px;
+    background: var(--crit);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--crit);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .hero h1 {
+    font-size: clamp(2.25rem, 5vw, 3.75rem);
+    font-weight: 700;
+    max-width: 20ch;
+    margin-bottom: 1rem;
+  }
+
+  .hero h1 .accent {
+    color: var(--brand);
+  }
+
+  .hero-meta {
+    color: var(--text-dim);
+    font-size: 1rem;
+    max-width: 65ch;
+    margin-bottom: 2.5rem;
+  }
+
+  .hero-meta strong { color: var(--text); font-weight: 500; }
+
+  /* ============== SCORECARD ============== */
+
+  .scorecard {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-top: 2rem;
+  }
+
+  .score {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 200ms var(--ease), transform 200ms var(--ease);
+  }
+
+  .score:hover {
+    border-color: var(--border-hi);
+    transform: translateY(-2px);
+  }
+
+  .score::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 3px;
+    height: 100%;
+    background: var(--score-color, var(--brand));
+  }
+
+  .score[data-score="1"], .score[data-score="2"] { --score-color: var(--crit); }
+  .score[data-score="3"] { --score-color: var(--high); }
+  .score[data-score="4"] { --score-color: var(--med); }
+  .score[data-score="5"] { --score-color: var(--pass); }
+
+  .score-label {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+  }
+
+  .score-value {
+    font-family: 'Outfit', sans-serif;
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  .score-value .of { font-size: 1rem; color: var(--text-mute); font-weight: 400; }
+
+  .score-breakdown {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+  }
+
+  .score-breakdown .chip {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .chip-crit { color: var(--crit); }
+  .chip-high { color: var(--high); }
+  .chip-med  { color: var(--med); }
+  .chip-low  { color: var(--text-mute); }
+
+  .verdict-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 2.5rem;
+    padding: 1.25rem 1.5rem;
+    background: linear-gradient(to right, rgba(239, 68, 68, 0.08), transparent);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-left: 3px solid var(--crit);
+    border-radius: var(--radius);
+  }
+
+  .verdict-tag {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 700;
+    font-size: 1.25rem;
+    color: var(--crit);
+    letter-spacing: 0.02em;
+  }
+
+  .verdict-text { color: var(--text-dim); }
+  .verdict-text strong { color: var(--text); }
+
+  /* ============== SECTIONS ============== */
+
+  section.section {
+    padding-block: clamp(3rem, 6vw, 4.5rem);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  .section-num {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--brand);
+    font-size: 0.85rem;
+    font-weight: 500;
+  }
+
+  .section-head h2 {
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    font-weight: 600;
+  }
+
+  .section-lead {
+    color: var(--text-dim);
+    max-width: 75ch;
+    margin-bottom: 2rem;
+  }
+
+  /* ============== FINDING CARDS ============== */
+
+  .findings {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .finding {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem 1.5rem;
+    transition: border-color 200ms var(--ease);
+    position: relative;
+  }
+
+  .finding:hover { border-color: var(--border-hi); }
+
+  .finding[data-sev="CRITICAL"] { border-left: 3px solid var(--crit); }
+  .finding[data-sev="HIGH"]     { border-left: 3px solid var(--high); }
+  .finding[data-sev="MEDIUM"]   { border-left: 3px solid var(--med); }
+  .finding[data-sev="LOW"]      { border-left: 3px solid var(--low); }
+
+  .finding-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .sev-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-weight: 500;
+  }
+
+  .sev-badge[data-sev="CRITICAL"] { background: rgba(239, 68, 68, 0.15); color: var(--crit); }
+  .sev-badge[data-sev="HIGH"]     { background: rgba(245, 158, 11, 0.15); color: var(--high); }
+  .sev-badge[data-sev="MEDIUM"]   { background: rgba(96, 165, 250, 0.15); color: var(--med); }
+  .sev-badge[data-sev="LOW"]      { background: rgba(107, 114, 128, 0.15); color: var(--text-dim); }
+
+  .finding-id {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--text-mute);
+  }
+
+  .finding-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.05rem;
+    font-weight: 600;
+    flex: 1 1 min(100%, 20ch);
+  }
+
+  .finding-body {
+    color: var(--text-dim);
+    font-size: 0.92rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .finding-body strong { color: var(--text); font-weight: 500; }
+
+  .finding-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    font-size: 0.78rem;
+    padding-top: 0.75rem;
+    border-top: 1px dashed var(--border);
+  }
+
+  .meta-label {
+    color: var(--text-mute);
+    margin-right: 0.4rem;
+  }
+
+  .meta-val {
+    color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .meta-fix { color: var(--brand); }
+
+  /* ============== TABLES ============== */
+
+  .data-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    font-size: 0.88rem;
+  }
+
+  .data-table th {
+    background: var(--surface-2);
+    text-align: left;
+    padding: 0.8rem 1rem;
+    font-weight: 500;
+    color: var(--text);
+    font-size: 0.8rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .data-table td {
+    padding: 0.8rem 1rem;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tr:hover td { background: var(--surface-2); }
+
+  .data-table td code {
+    color: var(--text);
+    background: var(--surface-3);
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.82em;
+  }
+
+  .table-scroll {
+    overflow-x: auto;
+    border-radius: var(--radius);
+  }
+
+  /* ============== MEMORY TIERS ============== */
+
+  .tiers {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+    margin-block: 2rem;
+  }
+
+  .tier {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    position: relative;
+    transition: transform 200ms var(--ease), border-color 200ms var(--ease);
+  }
+
+  .tier:hover {
+    transform: translateY(-2px);
+    border-color: var(--border-hi);
+  }
+
+  .tier-num {
+    font-family: 'Outfit', sans-serif;
+    font-size: 3rem;
+    font-weight: 800;
+    color: var(--brand);
+    opacity: 0.25;
+    position: absolute;
+    top: 0.5rem;
+    right: 1rem;
+    line-height: 1;
+  }
+
+  .tier-name {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+    color: var(--text);
+  }
+
+  .tier-scope {
+    font-size: 0.8rem;
+    color: var(--text-mute);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+  }
+
+  .tier-path {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+    color: var(--brand);
+    padding: 0.5rem 0.75rem;
+    background: var(--surface-3);
+    border-radius: var(--radius-sm);
+    margin-bottom: 1rem;
+    word-break: break-all;
+  }
+
+  .tier-files {
+    list-style: none;
+    font-size: 0.85rem;
+  }
+
+  .tier-files li {
+    padding: 0.25rem 0;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .tier-files li::before {
+    content: '├─';
+    color: var(--text-mute);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .tier-files li:last-child::before { content: '└─'; }
+
+  .tier-files code {
+    color: var(--text);
+    font-size: 0.85em;
+  }
+
+  /* ============== CODE BLOCK ============== */
+
+  pre.code {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    overflow-x: auto;
+    font-size: 0.82rem;
+    line-height: 1.6;
+    color: var(--text-dim);
+  }
+
+  pre.code .cmt { color: var(--text-mute); }
+  pre.code .kw { color: var(--brand); }
+
+  /* ============== ROADMAP ============== */
+
+  .roadmap {
+    display: grid;
+    gap: 1rem;
+    margin-top: 1.5rem;
+  }
+
+  .release {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .release-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .release-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    background: var(--brand);
+    color: var(--bg);
+    padding: 0.25rem 0.6rem;
+    border-radius: 4px;
+    font-weight: 500;
+  }
+
+  .release-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--text);
+    flex: 1;
+  }
+
+  .release-eta {
+    font-size: 0.8rem;
+    color: var(--text-mute);
+  }
+
+  .release-body {
+    padding: 1.25rem 1.5rem;
+  }
+
+  .release-body ol {
+    padding-left: 1.5rem;
+    color: var(--text-dim);
+  }
+
+  .release-body ol li {
+    padding: 0.3rem 0;
+  }
+
+  .release-body strong { color: var(--text); }
+
+  /* ============== PROPOSAL ============== */
+
+  .proposal {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+
+  @media (min-width: 820px) {
+    .proposal { grid-template-columns: 1fr 1fr; }
+  }
+
+  .prop-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+  }
+
+  .prop-card h4 {
+    font-size: 1rem;
+    margin-bottom: 0.75rem;
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  .prop-card ul {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    padding-left: 1.25rem;
+  }
+
+  .prop-card ul li { padding: 0.2rem 0; }
+
+  /* ============== FOOTER ============== */
+
+  footer {
+    padding-block: 3rem;
+    text-align: center;
+    color: var(--text-mute);
+    font-size: 0.85rem;
+  }
+
+  footer a { color: var(--text-dim); }
+
+  /* ============== COMMAND ROUTING TABLE ============== */
+
+  .route-badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.03em;
+  }
+
+  .route-keep   { background: rgba(16, 185, 129, 0.15); color: var(--pass); }
+  .route-merge  { background: rgba(96, 165, 250, 0.15); color: var(--med); }
+  .route-delete { background: rgba(239, 68, 68, 0.15); color: var(--crit); }
+  .route-fix    { background: rgba(245, 158, 11, 0.15); color: var(--high); }
+
+  /* ============== STAGGER ============== */
+
+  .stagger > * {
+    opacity: 0;
+    transform: translateY(12px);
+    animation: fadeUp 400ms cubic-bezier(0, 0, 0.2, 1) forwards;
+  }
+  .stagger > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger > *:nth-child(2) { animation-delay: 60ms; }
+  .stagger > *:nth-child(3) { animation-delay: 120ms; }
+  .stagger > *:nth-child(4) { animation-delay: 180ms; }
+  .stagger > *:nth-child(5) { animation-delay: 240ms; }
+
+  @keyframes fadeUp {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ============== FILTER BAR ============== */
+
+  .filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .filter-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 0.4rem 0.85rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 150ms var(--ease);
+  }
+
+  .filter-btn:hover {
+    border-color: var(--border-hi);
+    color: var(--text);
+  }
+
+  .filter-btn[aria-pressed="true"] {
+    background: var(--brand);
+    color: var(--bg);
+    border-color: var(--brand);
+    font-weight: 500;
+  }
+
+  .filter-btn .count {
+    opacity: 0.6;
+    margin-left: 0.3rem;
+  }
+
+  .finding.hidden { display: none; }
+
+</style>
+</head>
+<body>
+
+<nav class="topbar">
+  <div class="wrap topbar-inner">
+    <div class="brand-lock">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span>QUALIA</span>
+      <span class="brand-sep">▸</span>
+      <span class="brand-sub">Framework Review</span>
+    </div>
+    <ul class="nav-links">
+      <li><a href="#summary">Summary</a></li>
+      <li><a href="#top10">Critical</a></li>
+      <li><a href="#memory">Memory</a></li>
+      <li><a href="#commands">Commands</a></li>
+      <li><a href="#polish">Polish</a></li>
+      <li><a href="#roadmap">Roadmap</a></li>
+    </ul>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="hero-tag">Review · 2026-04-22 · v4.1.0</div>
+    <h1>Production review of <span class="accent">the complete framework.</span></h1>
+    <p class="hero-meta">
+      4 parallel specialist audits across <strong>26 skills</strong>, <strong>8 agents</strong>, <strong>7 hooks</strong>, <strong>4 bin scripts</strong>, and the HTML surfaces. <strong>142 findings total</strong>. The Road skeleton is sound — context isolation, goal-backward verification, wave parallelization all hold up. But the framework has accumulated structural debt: invisible dependencies, silent failures, orphan commands, and no per-employee scoping.
+    </p>
+
+    <div class="scorecard stagger" id="summary">
+      <article class="score" data-score="2">
+        <div class="score-label">Commands &amp; Skills</div>
+        <div class="score-value">2<span class="of">/5</span></div>
+        <div class="score-breakdown">
+          <span class="chip chip-crit">5 crit</span>
+          <span class="chip chip-high">14 high</span>
+          <span class="chip chip-med">17 med</span>
+          <span class="chip chip-low">9 low</span>
+        </div>
+      </article>
+      <article class="score" data-score="3">
+        <div class="score-label">Hooks &amp; State</div>
+        <div class="score-value">3<span class="of">/5</span></div>
+        <div class="score-breakdown">
+          <span class="chip chip-crit">0 crit</span>
+          <span class="chip chip-high">3 high</span>
+          <span class="chip chip-med">16 med</span>
+          <span class="chip chip-low">13 low</span>
+        </div>
+      </article>
+      <article class="score" data-score="2">
+        <div class="score-label">Memory &amp; Knowledge</div>
+        <div class="score-value">2<span class="of">/5</span></div>
+        <div class="score-breakdown">
+          <span class="chip chip-crit">3 crit</span>
+          <span class="chip chip-high">5 high</span>
+          <span class="chip chip-med">6 med</span>
+          <span class="chip chip-low">6 low</span>
+        </div>
+      </article>
+      <article class="score" data-score="2">
+        <div class="score-label">Design &amp; UX</div>
+        <div class="score-value">2<span class="of">/5</span></div>
+        <div class="score-breakdown">
+          <span class="chip chip-crit">0 crit</span>
+          <span class="chip chip-high">11 high</span>
+          <span class="chip chip-med">15 med</span>
+          <span class="chip chip-low">11 low</span>
+        </div>
+      </article>
+    </div>
+
+    <div class="verdict-row">
+      <span class="verdict-tag">FAIL</span>
+      <span class="verdict-text">
+        <strong>8 critical blockers · 33 high findings.</strong> Functional for OWNER daily use, structurally unsound for multi-employee scale. Ship v4.1.1 hotfix before onboarding the next team member; ship v4.2.0 before the next major client delivery.
+      </span>
+    </div>
+  </div>
+</header>
+
+<section class="section" id="top10">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="section-num">01</span>
+      <h2>Top 10 Critical &amp; High Issues</h2>
+    </div>
+    <p class="section-lead">Fix-first list. Each one is load-bearing — they either silently corrupt output (1–5), create maintenance hell (6–7), or break team ergonomics (8–10).</p>
+
+    <div class="filter-bar" role="toolbar" aria-label="Severity filter">
+      <button class="filter-btn" aria-pressed="true" data-filter="all">All <span class="count">10</span></button>
+      <button class="filter-btn" aria-pressed="false" data-filter="CRITICAL">Critical <span class="count">5</span></button>
+      <button class="filter-btn" aria-pressed="false" data-filter="HIGH">High <span class="count">5</span></button>
+    </div>
+
+    <div class="findings">
+
+      <article class="finding" data-sev="CRITICAL">
+        <div class="finding-head">
+          <span class="sev-badge" data-sev="CRITICAL">CRITICAL</span>
+          <span class="finding-id">#01</span>
+          <h3 class="finding-title">grounding.md is a phantom for existing installs</h3>
+        </div>
+        <div class="finding-body">
+          The file exists in the repo at <code>rules/grounding.md</code> but is <strong>missing from the installed</strong> <code>~/.claude/rules/</code> for users who upgraded from v4.0.x. Every planner, builder, plan-checker, and verifier spawn references <code>@~/.claude/rules/grounding.md</code> and silently gets nothing. The Grounding Protocol and Severity Rubric are improvised. Every 1–5 score is ungrounded.
+        </div>
+        <div class="finding-meta">
+          <span><span class="meta-label">Where:</span> <code class="meta-val">8 skills/agents</code></span>
+          <span><span class="meta-label">Impact:</span> <span class="meta-val">Every verified phase, every project, silently</span></span>
+          <span class="meta-fix"><span class="meta-label">Fix:</span> <span class="meta-val">install.js post-upgrade routine — diff rules/, copy missing</span></span>
+        </div>
+      </article>
+
+      <article class="finding" data-sev="CRITICAL">
+        <div class="finding-head">
+          <span class="sev-badge" data-sev="CRITICAL">CRITICAL</span>
+          <span class="finding-id">#02</span>
+          <h3 class="finding-title">Builder agent never reads the knowledge base</h3>
+        </div>
+        <div class="finding-body">
+          <code>agents/builder.md</code> has zero references to <code>~/.claude/knowledge/</code>. Patterns like <em>"Always use <code>lib/supabase/server.ts</code> for mutations"</em> reach the planner but not the agent that writes code. Patterns exist and don't affect output.
+        </div>
+        <div class="finding-meta">
+          <span><span class="meta-label">Where:</span> <code class="meta-val">agents/builder.md</code></span>
+          <span class="meta-fix"><span class="meta-label">Fix:</span> <span class="meta-val">Add @-reference to knowledge in builder preamble</span></span>
+        </div>
+      </article>
+
+      <article class="finding" data-sev="CRITICAL">
+        <div class="finding-head">
+          <span class="sev-badge" data-sev="CRITICAL">CRITICAL</span>
+          <span class="finding-id">#03</span>
+          <h3 class="finding-title">11 of 14 knowledge files are invisible to every skill</h3>
+        </div>
+        <div class="finding-body">
+          <code>~/.claude/knowledge/</code> contains <code>qualia-context.md</code>, <code>deployment-map.md</code>, <code>supabase-patterns.md</code>, <code>voice-agent-patterns.md</code>, <code>employees.md</code>, and 6 more — grepping the framework for these filenames returns <strong>zero hits</strong>. Dead weight. <code>session-digest.md</code> hasn't updated since Apr 12 (the hook that wrote it was deleted).
+        </div>
+        <div class="finding-meta">
+          <span><span class="meta-label">Impact:</span> <span class="meta-val">Knowledge is write-only; no skill discovers new files</span></span>
+          <span class="meta-fix"><span class="meta-label">Fix:</span> <span class="meta-val">bin/knowledge.js — discovery + 3-tier merge</span></span>
+        </div>
+      </article>
+
+      <article class="finding" data-sev="CRITICAL">
+        <div class="finding-head">
+          <span class="sev-badge" data-sev="CRITICAL">CRITICAL</span>
+          <span class="finding-id">#04</span>
+          <h3 class="finding-title">No per-employee memory scoping</h3>
+        </div>
+        <div class="finding-body">
+          All memory lives in global <code>~/.claude/knowledge/</code>. Hasan, Fawzi, Moayad share the same files. <code>employees.md</code> is a flat roster, not a scoping mechanism. Personal preferences mix with universal patterns, with no filtering.
+        </div>
+        <div class="finding-meta">
+          <span class="meta-fix"><span class="meta-label">Fix:</span> <span class="meta-val">3-tier architecture — Framework / Employee / Project</span></span>
+        </div>
+      </article>
+
+      <article class="finding" data-sev="CRITICAL">
+        <div class="finding-head">
+          <span class="sev-badge" data-sev="CRITICAL">CRITICAL</span>
+          <span class="finding-id">#05</span>
+          <h3 class="finding-title">qualia-report ERP upload: silent injection &amp; auth failures</h3>
+        </div>
+        <div class="finding-body">
+          <strong>Empty API key</strong> → sends <code>Authorization: Bearer </code> (blank); 401 handler says "Ask Fawzi" without diagnosing.<br />
+          <strong>SUBMITTED_BY</strong> shell-interpolated into <code>node -e</code> → a single quote in git user.name breaks silently.<br />
+          <strong>report_id</strong> fallback to empty string on state.js failure → commit message loses ID, ERP payload corrupted.
+        </div>
+        <div class="finding-meta">
+          <span><span class="meta-label">Where:</span> <code class="meta-val">skills/qualia-report/SKILL.md:84, 114-163</code></span>
+          <span class="meta-fix"><span class="meta-label">Fix:</span> <span class="meta-val">Guard empty key; env-var pass; validate report_id</span></span>
+        </div>
+      </article>
+
+      <article class="finding" data-sev="HIGH">
+        <div class="finding-head">
+          <span class="sev-badge" data-sev="HIGH">HIGH</span>
+          <span class="finding-id">#06</span>
+          <h3 class="finding-title">Triple overlap: qualia-optimize / qualia-review / qualia-polish</h3>
+        </div>
+        <div class="finding-body">
+          All three run the same grep patterns (fonts, max-width, gradients, service_role, empty catches, sequential awaits, <code>&lt;img&gt;</code> without next/image). Three output files, three severity scales, one underlying issue. User gets three reports on the same problems.
+        </div>
+        <div class="finding-meta">
+          <span class="meta-fix"><span class="meta-label">Fix:</span> <span class="meta-val">qualia-review = detect, qualia-polish = fix, delete qualia-optimize</span></span>
+        </div>
+      </article>
+
+      <article class="finding" data-sev="HIGH">
+        <div class="finding-head">
+          <span class="sev-badge" data-sev="HIGH">HIGH</span>
+          <span class="finding-id">#07</span>
+          <h3 class="finding-title">4 skills are orphans — never invoked by the Road</h3>
+        </div>
+        <div class="finding-body">
+          <code>qualia-test</code>, <code>qualia-debug</code>, <code>qualia-task</code>, <code>qualia-quick</code> are never auto-triggered by any Road step. <strong>The Road has no automated test gate</strong> between build and verify. If verification fails, the Road routes to <code>/qualia-plan --gaps</code>, not <code>/qualia-debug</code>.
+        </div>
+        <div class="finding-meta">
+          <span class="meta-fix"><span class="meta-label">Fix:</span> <span class="meta-val">Integrate /qualia-test post-build, /qualia-debug on verify-fail</span></span>
+        </div>
+      </article>
+
+      <article class="finding" data-sev="HIGH">
+        <div class="finding-head">
+          <span class="sev-badge" data-sev="HIGH">HIGH</span>
+          <span class="finding-id">#08</span>
+          <h3 class="finding-title">Color palette drift across 5 surfaces</h3>
+        </div>
+        <div class="finding-body">
+          <code>TEAL_DIM</code> differs <code>rgb(0,130,135)</code> (statusline) vs <code>rgb(0,140,145)</code> (qualia-ui). <code>DIM</code> differs across 3 files. Brand teal in demo.html <code>#00ced9</code> vs help.html <code>#00ced1</code>. Display fonts split: Fraunces vs Outfit. DIM fails WCAG AA at ~3.2:1 on dark terminals.
+        </div>
+        <div class="finding-meta">
+          <span class="meta-fix"><span class="meta-label">Fix:</span> <span class="meta-val">bin/colors.js — single source of truth</span></span>
+        </div>
+      </article>
+
+      <article class="finding" data-sev="HIGH">
+        <div class="finding-head">
+          <span class="sev-badge" data-sev="HIGH">HIGH</span>
+          <span class="finding-id">#09</span>
+          <h3 class="finding-title">Statusline shows installer name, not current operator</h3>
+        </div>
+        <div class="finding-body">
+          <code>bin/statusline.js:292</code> reads <code>.qualia-config.json</code> set at install time. On a shared machine, every operator sees the installer's name. Says <em>"Qualia member: Hasan"</em> even when Fawzi is driving.
+        </div>
+        <div class="finding-meta">
+          <span class="meta-fix"><span class="meta-label">Fix:</span> <span class="meta-val">Session-scoped identity via git user.name or env var</span></span>
+        </div>
+      </article>
+
+      <article class="finding" data-sev="HIGH">
+        <div class="finding-head">
+          <span class="sev-badge" data-sev="HIGH">HIGH</span>
+          <span class="finding-id">#10</span>
+          <h3 class="finding-title">/qualia-ship has no state guard and shallow security</h3>
+        </div>
+        <div class="finding-body">
+          No <code>state.js check</code> at start — can invoke from any state. Security check only greps <code>service_role</code>; misses hardcoded keys, tracked <code>.env</code>, <code>dangerouslySetInnerHTML</code>. Post-deploy uses literal <code>{domain}</code> placeholder — expects LLM to hallucinate the URL.
+        </div>
+        <div class="finding-meta">
+          <span class="meta-fix"><span class="meta-label">Fix:</span> <span class="meta-val">State precondition + full qualia-review CRITICAL checks + read deployed_url from tracking.json</span></span>
+        </div>
+      </article>
+
+    </div>
+  </div>
+</section>
+
+<section class="section" id="silent-fails">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="section-num">02</span>
+      <h2>15 Most Dangerous Silent Fails</h2>
+    </div>
+    <p class="section-lead">Places where users see a green "ok" while the underlying operation produced garbage. These are the ones most likely to damage trust when team members discover them.</p>
+
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th style="width:60px">Sev</th>
+            <th>File:line</th>
+            <th>Silent behavior</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="sev-badge" data-sev="CRITICAL">CRIT</span></td><td><code>qualia-report/SKILL.md:84</code></td><td>Empty pipe → report_id becomes <code>""</code>, commit loses ID</td></tr>
+          <tr><td><span class="sev-badge" data-sev="CRITICAL">CRIT</span></td><td><code>qualia-report/SKILL.md:114</code></td><td>Empty API key → blank Bearer sent to ERP, generic 401</td></tr>
+          <tr><td><span class="sev-badge" data-sev="CRITICAL">CRIT</span></td><td><code>qualia-handoff/SKILL.md:39</code></td><td>Malformed tracking.json → empty URL; curl hits blank target</td></tr>
+          <tr><td><span class="sev-badge" data-sev="HIGH">HIGH</span></td><td><code>state.js:107</code></td><td>Lock timeout falls through silently — concurrent writes possible</td></tr>
+          <tr><td><span class="sev-badge" data-sev="HIGH">HIGH</span></td><td><code>pre-push.js:22,47</code></td><td>No lock coord with state.js; cwd assumed to be repo root</td></tr>
+          <tr><td><span class="sev-badge" data-sev="HIGH">HIGH</span></td><td><code>qualia-help/SKILL.md:44</code></td><td>Missing template → sed writes empty file → "ok" printed anyway</td></tr>
+          <tr><td><span class="sev-badge" data-sev="HIGH">HIGH</span></td><td><code>qualia-verify/SKILL.md:65</code></td><td><code>FRONTEND=true</code> never set — browser QA never spawns</td></tr>
+          <tr><td><span class="sev-badge" data-sev="HIGH">HIGH</span></td><td><code>cli.js:827</code></td><td>ERP ping uses <code>curl</code> — unavailable on older Windows</td></tr>
+          <tr><td><span class="sev-badge" data-sev="MEDIUM">MED</span></td><td><code>state.js:179,229</code></td><td>readTracking/readState swallow corrupt JSON as "missing"</td></tr>
+          <tr><td><span class="sev-badge" data-sev="MEDIUM">MED</span></td><td><code>state.js:59</code></td><td>Corrupt journal silently cleared, no log</td></tr>
+          <tr><td><span class="sev-badge" data-sev="MEDIUM">MED</span></td><td><code>pre-deploy-gate.js:51</code></td><td>package.json missing → ALL gates silently skipped</td></tr>
+          <tr><td><span class="sev-badge" data-sev="MEDIUM">MED</span></td><td><code>pre-deploy-gate.js:146</code></td><td>File read failure → security scan silently skips that file</td></tr>
+          <tr><td><span class="sev-badge" data-sev="MEDIUM">MED</span></td><td><code>migration-guard.js:96</code></td><td>DROP TABLE check is file-global — one IF EXISTS masks another DROP</td></tr>
+          <tr><td><span class="sev-badge" data-sev="MEDIUM">MED</span></td><td><code>state.js:329</code></td><td>Progress bar: phase 5/5 = 80% — never reaches 100%</td></tr>
+          <tr><td><span class="sev-badge" data-sev="LOW">LOW</span></td><td><code>session-start.js:128</code></td><td>Top-level catch; crash → no banner, trace records "allow" anyway</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="memory">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="section-num">03</span>
+      <h2>Memory Architecture — 3-Tier Proposal</h2>
+    </div>
+    <p class="section-lead">
+      Current state is flat, untiered, and half-invisible. Proposed architecture gives every finding a single home and makes discovery mechanical, not hardcoded.
+    </p>
+
+    <div class="tiers">
+      <article class="tier">
+        <span class="tier-num">1</span>
+        <h3 class="tier-name">Framework</h3>
+        <p class="tier-scope">Universal · ships with installer</p>
+        <div class="tier-path">~/.claude/knowledge/framework/</div>
+        <ul class="tier-files">
+          <li><code>stack-patterns.md</code></li>
+          <li><code>voice-patterns.md</code></li>
+          <li><code>security-patterns.md</code></li>
+          <li><code>common-fixes.md</code></li>
+          <li><code>KNOWLEDGE-INDEX.md</code></li>
+        </ul>
+      </article>
+
+      <article class="tier">
+        <span class="tier-num">2</span>
+        <h3 class="tier-name">Employee</h3>
+        <p class="tier-scope">Per-user · scoped by team code</p>
+        <div class="tier-path">~/.claude/knowledge/employee/</div>
+        <ul class="tier-files">
+          <li><code>preferences.md</code></li>
+          <li><code>my-patterns.md</code></li>
+          <li><code>my-fixes.md</code></li>
+          <li><code>KNOWLEDGE-INDEX.md</code></li>
+        </ul>
+      </article>
+
+      <article class="tier">
+        <span class="tier-num">3</span>
+        <h3 class="tier-name">Project</h3>
+        <p class="tier-scope">Per-repo · version controlled</p>
+        <div class="tier-path">.planning/knowledge/</div>
+        <ul class="tier-files">
+          <li><code>client-prefs.md</code></li>
+          <li><code>project-patterns.md</code></li>
+          <li><code>deployment.md</code></li>
+          <li><code>KNOWLEDGE-INDEX.md</code></li>
+        </ul>
+      </article>
+    </div>
+
+    <h3 style="margin-top:2rem;font-size:1rem;color:var(--text-dim);font-weight:500">Discovery utility — <code>bin/knowledge.js</code></h3>
+<pre class="code"><span class="cmt"># Merge all 3 tiers — project overrides employee overrides framework</span>
+<span class="kw">knowledge.js</span> load --type patterns
+
+<span class="cmt"># Search across tiers, labels source</span>
+<span class="kw">knowledge.js</span> search "supabase RLS"
+
+<span class="cmt"># Regenerate INDEX files with last_verified timestamps</span>
+<span class="kw">knowledge.js</span> index
+
+<span class="cmt"># Promote a Claude-native memory entry into Qualia structured tier</span>
+<span class="kw">knowledge.js</span> promote --from employee --to framework</pre>
+
+    <p style="color:var(--text-dim);margin-top:1.5rem;font-size:0.92rem">
+      <strong style="color:var(--text)">Staleness:</strong> INDEX tracks <code>last_verified</code> per file. Entries over 30 days are tagged <code>[STALE]</code> in merge output — skills can warn before using.
+      <strong style="color:var(--text)">Conflict:</strong> Project overrides Employee overrides Framework. Within a tier, newer timestamp wins.
+      <strong style="color:var(--text)">Claude native memory:</strong> Keep enabled. Native captures conversational context; Qualia captures structured patterns. Statusline shows both counts: <code>K:14 M:4</code>.
+    </p>
+  </div>
+</section>
+
+<section class="section" id="commands">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="section-num">04</span>
+      <h2>Commands That Don't Fit the Road</h2>
+    </div>
+    <p class="section-lead">14 skills rated against the Road. Verdict in the right column: keep, merge, delete, or fix integration.</p>
+
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead>
+          <tr><th style="width:200px">Skill</th><th>Status</th><th style="width:200px">Action</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>qualia-task</code></td><td>Orphan · overlaps qualia-quick</td><td><span class="route-badge route-delete">DELETE</span> fold into /qualia-quick --proper</td></tr>
+          <tr><td><code>qualia-quick</code></td><td>Orphan</td><td><span class="route-badge route-fix">EXTEND</span> add --proper flag</td></tr>
+          <tr><td><code>qualia-test</code></td><td>Orphan · never auto-invoked</td><td><span class="route-badge route-fix">INTEGRATE</span> hard gate post-/qualia-build</td></tr>
+          <tr><td><code>qualia-debug</code></td><td>Orphan · only suggested</td><td><span class="route-badge route-fix">INTEGRATE</span> auto-invoke on verify-fail</td></tr>
+          <tr><td><code>qualia-design</code></td><td>~90% duplicate of qualia-polish</td><td><span class="route-badge route-merge">MERGE</span> into /qualia-polish</td></tr>
+          <tr><td><code>qualia-optimize</code></td><td>Overlaps review + polish</td><td><span class="route-badge route-delete">DELETE</span> or repurpose as parallel wrapper</td></tr>
+          <tr><td><code>qualia-review</code></td><td>Orphan · no state guard</td><td><span class="route-badge route-fix">INTEGRATE</span> between build and verify</td></tr>
+          <tr><td><code>qualia-map</code></td><td>Optional brownfield</td><td><span class="route-badge route-keep">KEEP</span> auto-trigger on brownfield /qualia-new</td></tr>
+          <tr><td><code>qualia-research</code></td><td>Optional phase depth</td><td><span class="route-badge route-keep">KEEP</span></td></tr>
+          <tr><td><code>qualia-discuss</code></td><td>Optional phase depth</td><td><span class="route-badge route-keep">KEEP</span></td></tr>
+          <tr><td><code>qualia-idk</code></td><td>Alternate router · genuine diagnostic</td><td><span class="route-badge route-keep">KEEP</span> fix help.html:410 mis-description</td></tr>
+          <tr><td><code>qualia-learn</code></td><td>Meta</td><td><span class="route-badge route-fix">EXTEND</span> tier promotion</td></tr>
+          <tr><td><code>qualia-help</code></td><td>Reference page</td><td><span class="route-badge route-keep">KEEP</span></td></tr>
+          <tr><td><code>qualia-skill-new</code></td><td>Authoring</td><td><span class="route-badge route-keep">KEEP</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section-head" style="margin-top:3rem">
+      <span class="section-num">04.1</span>
+      <h2>Gaps — Missing from the Road</h2>
+    </div>
+
+    <div class="proposal">
+      <article class="prop-card">
+        <h4>Automated test gate</h4>
+        <ul>
+          <li>No skill runs tests after build, before verify</li>
+          <li>Current verifier greps code; never executes test suites</li>
+          <li><strong>Fix:</strong> Invoke <code>/qualia-test</code> as hard gate inside <code>/qualia-build</code> post-wave</li>
+        </ul>
+      </article>
+      <article class="prop-card">
+        <h4>Inter-phase code review</h4>
+        <ul>
+          <li>Goal-backward verify doesn't check code quality</li>
+          <li>A project can pass verify with poor code if acceptance criteria hold</li>
+          <li><strong>Fix:</strong> Run <code>/qualia-review</code> between build and verify</li>
+        </ul>
+      </article>
+      <article class="prop-card">
+        <h4>Adversarial build loop</h4>
+        <ul>
+          <li>Per harness-engineering research (Anthropic GAN, Archon adversarial-dev)</li>
+          <li>Generator ↔ evaluator with pre-negotiated sprint contract</li>
+          <li><strong>Fix:</strong> <code>/qualia-build --adversarial</code> wraps builder in generator/evaluator loop</li>
+        </ul>
+      </article>
+      <article class="prop-card">
+        <h4>Continuous reviewer agents</h4>
+        <ul>
+          <li>No background persona reviewers on each commit</li>
+          <li>Stripe Minion / Lopopolo "every push" pattern</li>
+          <li><strong>Fix:</strong> Pre-push hook spawns security + reliability + frontend-architect reviewers</li>
+        </ul>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="components">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="section-num">05</span>
+      <h2>Component Freshness — Fetching Latest</h2>
+    </div>
+    <p class="section-lead">No current mechanism in the framework. Grep for <code>shadcn</code>, <code>radix</code>, <code>component.*fetch</code> returns zero hits. Proposed skill below.</p>
+
+    <pre class="code"><span class="cmt"># Pulls latest shadcn components via official CLI</span>
+<span class="kw">/qualia-components</span> add button card dialog
+
+<span class="cmt"># Bumps all components to latest; writes .planning/component-changelog.md</span>
+<span class="kw">/qualia-components</span> update
+
+<span class="cmt"># Reports N components &gt; X days stale</span>
+<span class="kw">/qualia-components</span> check</pre>
+
+    <div class="proposal" style="margin-top:1.5rem">
+      <article class="prop-card">
+        <h4>Implementation details</h4>
+        <ul>
+          <li>Wraps <code>npx shadcn@latest add</code> for shadcn operations</li>
+          <li>Integrates with existing <code>vercel-plugin:shadcn</code> skill</li>
+          <li>WebFetch pulls latest docs (<code>ui.shadcn.com/docs/components/{name}</code>)</li>
+          <li>For Radix: <code>npm info @radix-ui/react-{name} version</code> → compares with installed</li>
+          <li>Writes diff summary so planner knows what changed</li>
+        </ul>
+      </article>
+      <article class="prop-card">
+        <h4>Integration points</h4>
+        <ul>
+          <li>Add component-version check to <code>/qualia-verify</code>: flag components &gt; 1 major behind</li>
+          <li><strong>Do NOT auto-update</strong> during builds — component breaks should be explicit + versioned</li>
+          <li>Add "component health" panel to statusline for active frontend projects</li>
+          <li>On <code>/qualia-new</code> frontend project, offer to scaffold with latest shadcn</li>
+        </ul>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="polish">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="section-num">06</span>
+      <h2>Design Polish Roadmap</h2>
+    </div>
+    <p class="section-lead">5 phases. Execute top to bottom. Each phase is atomic and independently shippable.</p>
+
+    <div class="roadmap">
+      <article class="release">
+        <div class="release-head">
+          <span class="release-tag">PHASE 1</span>
+          <span class="release-title">Color unification</span>
+          <span class="release-eta">~1 day</span>
+        </div>
+        <div class="release-body">
+          <ol>
+            <li>Create <code>bin/colors.js</code> as single source of truth for all ANSI palettes</li>
+            <li>Delete inline color definitions in statusline, qualia-ui, session-start, install, cli</li>
+            <li>Fix TEAL_DIM mismatch (standardize on <code>rgb(0,135,140)</code>)</li>
+            <li>Fix DIM mismatch — <strong>must pass WCAG AA</strong> on dark terminals (currently ~3.2:1)</li>
+            <li>Unify brand teal: <code>#00ced1</code> (matches ANSI <code>rgb(0,206,209)</code>) across all HTML surfaces</li>
+          </ol>
+        </div>
+      </article>
+
+      <article class="release">
+        <div class="release-head">
+          <span class="release-tag">PHASE 2</span>
+          <span class="release-title">Statusline ergonomics</span>
+          <span class="release-eta">~1 day</span>
+        </div>
+        <div class="release-body">
+          <ol>
+            <li>Terminal-width guard on Line 1 — progressive truncation (identity → memory → worktree → agent)</li>
+            <li>Milestone indicator alongside phase: <code>M2 P3/5 T2/4</code></li>
+            <li>Last-error from <code>tracking.json.last_error</code></li>
+            <li>Duration format <code>Xh Ym</code> above 60min (currently <code>90m</code>, <code>120m</code>)</li>
+            <li>Burn rate: <code>$/min</code> (more actionable than cumulative)</li>
+            <li>Per-operator identity — session-scoped, not installer-name</li>
+          </ol>
+        </div>
+      </article>
+
+      <article class="release">
+        <div class="release-head">
+          <span class="release-tag">PHASE 3</span>
+          <span class="release-title">HTML modernization</span>
+          <span class="release-eta">~1 day</span>
+        </div>
+        <div class="release-body">
+          <ol>
+            <li>Replace <code>@import</code> with <code>&lt;link rel="preconnect"&gt;&lt;link rel="stylesheet"&gt;</code> in help.html</li>
+            <li>Unify design tokens across help.html and demo.html (shared <code>:root</code>)</li>
+            <li>Pick one display font — recommend <strong>Outfit</strong> (geometric, matches brand)</li>
+            <li><strong>Fix demo.html:506</strong> — <code>&lt;/span&gt;</code> should be <code>&lt;/div&gt;</code> (broken DOM)</li>
+            <li><strong>Fix help.html:410</strong> — <code>/qualia-idk</code> mis-described as alias</li>
+            <li>Adopt <code>@container</code> queries for card grids</li>
+            <li>Add <code>color-scheme: dark</code> to both HTML pages</li>
+          </ol>
+        </div>
+      </article>
+
+      <article class="release">
+        <div class="release-head">
+          <span class="release-tag">PHASE 4</span>
+          <span class="release-title">Skill descriptions</span>
+          <span class="release-eta">~half day</span>
+        </div>
+        <div class="release-body">
+          <ol>
+            <li>Trim 10 descriptions &gt; 30 words (autocomplete truncates)</li>
+            <li>Add trigger phrases to 4 skills with none (report, ship, verify, build)</li>
+            <li>Cap at 20 words + triggers</li>
+            <li>Move flag documentation out of frontmatter into skill body</li>
+          </ol>
+        </div>
+      </article>
+
+      <article class="release">
+        <div class="release-head">
+          <span class="release-tag">PHASE 5</span>
+          <span class="release-title">Component fetching</span>
+          <span class="release-eta">1–2 days</span>
+        </div>
+        <div class="release-body">
+          <ol>
+            <li>Build <code>/qualia-components</code> skill</li>
+            <li>Integrate with <code>vercel-plugin:shadcn</code></li>
+            <li>Add version-staleness check to <code>/qualia-verify</code></li>
+            <li>Document pattern in <code>guide.md</code></li>
+          </ol>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="roadmap">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="section-num">07</span>
+      <h2>Release Roadmap</h2>
+    </div>
+    <p class="section-lead">Priority-ordered. v4.1.1 hotfix unblocks team scaling. v4.2.0 is the structural release.</p>
+
+    <div class="roadmap">
+      <article class="release">
+        <div class="release-head">
+          <span class="release-tag">v4.1.1</span>
+          <span class="release-title">Hotfix — ship this week</span>
+          <span class="release-eta">~2 hours</span>
+        </div>
+        <div class="release-body">
+          <ol>
+            <li>Auto-copy missing rules on version bump (fixes <strong>grounding.md phantom</strong>)</li>
+            <li>Guard empty API_KEY in <code>qualia-report</code></li>
+            <li>Fix broken <code>&lt;/span&gt;</code> in demo.html:506</li>
+            <li>Fix help.html:410 <code>/qualia-idk</code> description</li>
+            <li>Add state guard to <code>/qualia-ship</code></li>
+          </ol>
+        </div>
+      </article>
+
+      <article class="release">
+        <div class="release-head">
+          <span class="release-tag">v4.2.0</span>
+          <span class="release-title">Structural — 2 weeks</span>
+          <span class="release-eta">next sprint</span>
+        </div>
+        <div class="release-body">
+          <ol>
+            <li>3-tier memory architecture + <code>bin/knowledge.js</code></li>
+            <li>Merge <code>qualia-design</code> into <code>qualia-polish</code>; delete orphan <code>qualia-task</code></li>
+            <li>Unified <code>bin/colors.js</code></li>
+            <li>Builder agent loads knowledge</li>
+            <li>Integrate <code>/qualia-test</code> as build gate; <code>/qualia-debug</code> on verify-fail</li>
+            <li>cwd → git root resolution for state.js, pre-push, pre-compact (fixes 3 MED findings at once)</li>
+          </ol>
+        </div>
+      </article>
+
+      <article class="release">
+        <div class="release-head">
+          <span class="release-tag">v4.3.0</span>
+          <span class="release-title">Harness patterns — 4 weeks</span>
+          <span class="release-eta">month out</span>
+        </div>
+        <div class="release-body">
+          <ol>
+            <li>Adversarial build mode (generator ↔ evaluator GAN-style)</li>
+            <li>Continuous reviewer agents (security/reliability/frontend personas on every push)</li>
+            <li>Source-code structural tests (file&lt;350 lines, schema dedup, no-unknown)</li>
+            <li><code>/qualia-components</code> skill</li>
+          </ol>
+        </div>
+      </article>
+
+      <article class="release">
+        <div class="release-head">
+          <span class="release-tag">v4.4.0</span>
+          <span class="release-title">Team-scale — ongoing</span>
+          <span class="release-eta">quarter</span>
+        </div>
+        <div class="release-body">
+          <ol>
+            <li>Per-operator identity on statusline</li>
+            <li>Shared-state coordination lock for multi-agent projects</li>
+            <li>Token burn rate + milestone progress indicators</li>
+            <li>Knowledge staleness tracking + auto-prune</li>
+          </ol>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="verdict">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="section-num">08</span>
+      <h2>Final Verdict</h2>
+    </div>
+
+    <div class="proposal">
+      <article class="prop-card" style="border-left:3px solid var(--pass)">
+        <h4 style="color:var(--pass)">Strengths</h4>
+        <p style="color:var(--text-dim);font-size:0.92rem">
+          The Road skeleton is sound. Context isolation, goal-backward verification, story-file plans, wave-based parallelization, and the state machine hold up against current research (Anthropic, OpenAI, Archon). The harness pattern is <strong>genuinely good</strong> — these are the right primitives.
+        </p>
+      </article>
+
+      <article class="prop-card" style="border-left:3px solid var(--crit)">
+        <h4 style="color:var(--crit)">Structural debt — three clusters</h4>
+        <ul>
+          <li><strong>Invisible dependencies</strong> — grounding.md, 11 knowledge files, builder↔knowledge disconnect. The framework believes things are loaded that aren't.</li>
+          <li><strong>Silent failures</strong> — 15 high-impact silent-fail paths where users get "ok" while operations produced garbage.</li>
+          <li><strong>Orphan skills</strong> — 4 commands never touch the Road; 3 triple-overlap. Real mental overhead for the team.</li>
+        </ul>
+      </article>
+    </div>
+
+    <div class="verdict-row" style="margin-top:2rem">
+      <span class="verdict-tag" style="color:var(--high)">SHIPPING BAR</span>
+      <span class="verdict-text">
+        This review would <strong>FAIL <code>/qualia-ship</code></strong> on a client project. The framework needs v4.1.1 hotfix <strong>before onboarding the next employee</strong>, and v4.2.0 before the next major client delivery.
+      </span>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    Qualia Framework v4.1.0 · Production Review · 2026-04-22 · Generated by <a href="#top10">/qualia-review</a> · 142 findings across 4 specialist audits
+  </div>
+</footer>
+
+<script>
+  // Severity filter
+  const buttons = document.querySelectorAll('.filter-btn');
+  const findings = document.querySelectorAll('#top10 .finding');
+  buttons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      buttons.forEach(b => b.setAttribute('aria-pressed', 'false'));
+      btn.setAttribute('aria-pressed', 'true');
+      const filter = btn.dataset.filter;
+      findings.forEach(f => {
+        if (filter === 'all' || f.dataset.sev === filter) {
+          f.classList.remove('hidden');
+        } else {
+          f.classList.add('hidden');
+        }
+      });
+    });
+  });
+
+  // Reveal on scroll
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.style.opacity = '1';
+        e.target.style.transform = 'translateY(0)';
+        io.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.08 });
+
+  document.querySelectorAll('.finding, .score, .tier, .release, .prop-card').forEach(el => {
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(12px)';
+    el.style.transition = 'opacity 500ms cubic-bezier(0, 0, 0.2, 1), transform 500ms cubic-bezier(0, 0, 0.2, 1)';
+    io.observe(el);
+  });
+</script>
+
+</body>
+</html>
