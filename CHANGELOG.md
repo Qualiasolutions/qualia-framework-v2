@@ -8,117 +8,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Note: git tags for historical versions were not retained; commit references are approximate
 > and dates reflect commit history rather than npm publish timestamps.
 
-## [Unreleased] — v4.3.0 phase 2 (cron-runnable memory flush)
+## [4.3.0] — 2026-04-26
 
-**`bin/knowledge-flush.js` — non-interactive `/qualia-flush` runner.** Closes the memory loop so it runs without a Claude Code session: cron triggers the script weekly, it shells out to `claude -p "/qualia-flush --days 7"`, the skill promotes the past week's daily-log entries to the curated tier, the loader makes them reachable on the next builder spawn. The framework now compounds even on weeks when no project is touched.
-
-### Added
-
-- **`bin/knowledge-flush.js`** — Cron-runnable Node script that wraps `/qualia-flush`. Pass-through args (`--days N`, `--dry-run`, `--project NAME`). Hard-caps the underlying `claude -p` call at 5 minutes. Writes a structured JSONL audit log to `~/.claude/.qualia-flush.log` so the user can inspect when/what each scheduled run produced. Cron-spam-safe by design: missing `claude` CLI on PATH → exits 0 with logged skip; empty daily-log within the window → exits 0 silently; only true execution failures exit 1 (so `MAILTO=` cron alerts are signal not noise). Recommended cron line is documented in the script header.
-- **`qualia-framework flush` CLI command** — convenience wrapper around the script for ad-hoc invocation. `qualia-framework flush --dry-run` previews what the next cron run would do.
-
-### Changed
-
-- **`bin/install.js` ships `knowledge-flush.js`** alongside the other bin files. Chmod'd executable, included in `QUALIA_BIN_FILES` for clean uninstall, checked by `doctor`. The CLI's `help` lists the new command.
-
-### How to enable weekly auto-flush
-
-Add this to your crontab (`crontab -e`):
-
-```
-0 3 * * 0 node ~/.claude/bin/knowledge-flush.js >> ~/.claude/.qualia-flush.log 2>&1
-```
-
-Sunday 3 AM local. Adjust the schedule to taste. The script self-skips when there's nothing to flush, so daily cadence is also safe — just wasteful.
-
-### Notes
-
-This finishes the **memory-loop end-to-end automation** that v4.2.0 phase 1 began: Stop hook captures every turn → cron-fired flush promotes the survivors → loader makes the curated tier reachable to every spawn. No human action required between weeks; the framework gets smarter on autopilot.
-
-What's left in v4.3.0: **worktree-aware phase parallelism** (Cole Medin's pillars 2–4: `bin/qualia-worktree.sh` + port-from-hash + Supabase branch-per-worktree). That's a meaningfully bigger lift involving real shell scripts and edge-case handling around port allocation and database isolation; saving for a dedicated milestone phase rather than stacking on top of the already-substantial v4.2.0 + v4.3.0 phase 1+2 review surface.
-
-## [Unreleased] — v4.3.0 phase 1 (self-healing + adversarial + subdir loader)
-
-**Self-healing AI layer + adversarial second-opinion verifier + loader subdirectory support.** First slice of the v4.3.0 "Parallel + Self-Healing" milestone. Stacks on the v4.2.0 phase 3 (`feat/v4.2.0-flush-and-forks`).
+**The "Compound + Self-Healing" release.** Five sequenced phases (#9–#13 on GitHub) shipped in one window, scoped from the 2026-04-25 NotebookLM deep-dive on Anthropic's subagent upgrade, Karpathy's LLM knowledge bases, Cole Medin's parallel-worktrees playbook, and the mattpocock skills directory. Closes 11 of the 12 top-priority findings from the v4.1.0 audit. The framework now (a) compounds across every session through an automated memory layer, (b) heals itself when the verifier catches a gap, and (c) blocks destructive git operations universally.
 
 ### Added
 
-- **`/qualia-postmortem` skill (`skills/qualia-postmortem/SKILL.md`).** Cole Medin's pillar 5 — "anytime we encounter a bug in a pull request, we don't just fix the bug and move on, we fix the underlying system that allowed for the bug" (NotebookLM 2026-04-25). After a verify FAIL, this skill identifies which AI-layer file (`agents/X.md`, `rules/Y.md`, `skills/Z/SKILL.md`) should have caught the gap and proposes a surgical delta. Writes `.planning/phase-{N}-postmortem.md` for human review. With `--apply`, applies the deltas to the installed agent/rule files and flags a TODO for upstreaming to the framework repo (so the lesson survives reinstall). Promotes generalizable patterns to `~/.claude/knowledge/` via the loader's `append`. Conservative by design: max 3 deltas per postmortem to avoid the AI layer becoming a museum of edge cases. Without this loop, the same class of bug recurs phase after phase.
-- **`/qualia-verify --adversarial` flag (and auto-on for high-stakes phases).** Spawns a SECOND verifier in fresh context with an adversarial prompt — "find what's wrong, not what's right." Auto-enabled for the Handoff milestone and for any phase whose plan touches `auth|payment|migration|rls|service_role` files. The "kid grading their own homework" mitigation: a single verifier instance trained on the same rubric the planner+builder optimized against gets ~70% fewer real findings than a fresh-context adversarial pass. Findings union with the cooperative pass; either pass finding CRITICAL or HIGH = phase FAIL.
-- **`/qualia-verify` auto-invokes `/qualia-postmortem` on FAIL** (before the gap-closure re-plan). The next planner spawn benefits from any AI-layer deltas the user accepted from the postmortem report. Without `--apply`, the postmortem just writes the report; nothing destructive happens automatically.
-- **Loader subdirectory support (`bin/knowledge.js`).** Resolves the v4.2.0 phase 3 caveat that `concepts/{topic}.md` files were unreachable as bare names. Three new resolution modes: (1) subdirectory-qualified paths like `knowledge.js load concepts/stripe-checkout` work natively; (2) bare-name lookups auto-discover files in `concepts/`, `connections/`, and `daily-log/` if no top-level match exists; (3) top-level wins on filename collision (predictable precedence, qualifier overrides). `/qualia-flush` can now write to `concepts/` and skills can `load <topic>` without knowing the layout.
+#### Memory layer (Karpathy raw → wiki, end-to-end automated)
+
+- **`hooks/stop-session-log.js`** — Stop hook seeding the **raw tier**. Appends one mechanical line per turn to `~/.claude/knowledge/daily-log/{YYYY-MM-DD}.md` (project, branch, phase, task counts, commit count, top-3 touched files). Rate-limited 5min, skipped on no activity, never blocks.
+- **`bin/knowledge.js`** — Unified memory-layer loader. Subcommands: `load <file>` (with aliases `patterns`/`fixes`/`client` or any bare filename), `list`, `search <query>`, `append --type <pattern|fix|client> --title <T> --body <B>`, `path <file>`, `help`. Default invocation prints `index.md`. Subdirectory support: bare-name lookups auto-discover in `concepts/`/`connections/`/`daily-log/` if no top-level match exists; `concepts/foo` works as a qualified path; top-level wins on collision. Every command exits 0 on missing files with a `(no entries)` stub so skills can pipe output safely.
+- **`/qualia-flush` skill** — The LLM job that promotes raw → curated. Reads recent `daily-log/*.md` (default 14-day window, configurable), groups by project, identifies recurring patterns/decisions, writes promotions via `knowledge.js append`. Conservative: single-occurrence entries stay raw until they recur. `--dry-run`, `--project NAME` supported.
+- **`bin/knowledge-flush.js`** — Cron-runnable non-interactive `/qualia-flush` runner. Wraps `claude -p "/qualia-flush --days 7"` with a 5-minute hard cap and writes a structured JSONL audit log to `~/.claude/.qualia-flush.log`. Cron-spam-safe: missing CLI / empty daily-log → exits 0 with a logged skip; only true execution failures exit 1. Recommended cron: `0 3 * * 0 node ~/.claude/bin/knowledge-flush.js >> ~/.claude/.qualia-flush.log 2>&1`.
+- **`templates/knowledge/{agents,index}.md`** — Karpathy meta-doc + index entry point. Installed once at `~/.claude/knowledge/`, never overwrites existing content. Closes v4.1.0 audit finding #3 ("11 of 14 knowledge files are invisible") by giving every agent one deterministic place to start.
+- **Builder reads knowledge before writing code** (`agents/builder.md` §2b). New "Load Relevant Knowledge" section instructs the builder to call `knowledge.js` first. Hardcoded `cat` is forbidden — the loader is the only sanctioned path. Closes v4.1.0 audit finding #2 (the most-flagged miss).
+
+#### Self-healing AI layer
+
+- **`/qualia-postmortem` skill** — Cole Medin's pillar 5: "anytime we encounter a bug in a pull request, we don't just fix the bug, we fix the underlying system that allowed for the bug." After a verify FAIL, identifies which AI-layer file (`agents/X.md`, `rules/Y.md`, `skills/Z/SKILL.md`) should have caught the gap and proposes a surgical delta. Writes `.planning/phase-{N}-postmortem.md` for review. With `--apply`, edits the installed file and TODOs a framework-repo PR so the lesson survives reinstall. Promotes generalizable patterns to the knowledge layer. Conservative: max 3 deltas per postmortem.
+- **`/qualia-verify --adversarial` flag** — Spawns a SECOND verifier in fresh context with an adversarial prompt ("find what's wrong, not what's right"). Auto-enabled for the Handoff milestone and any phase whose plan touches `auth|payment|migration|rls|service_role` files. Findings union with the cooperative pass; either pass finding CRITICAL or HIGH = phase FAIL. Mitigates the "kid grading their own homework" bias documented in the NotebookLM source.
+- **`/qualia-verify` auto-invokes `/qualia-postmortem` on FAIL** before the gap-closure re-plan. The postmortem writes the report by default — no destructive AI-layer edits unless the user runs `--apply`.
+
+#### Forked subagents
+
+- **`CLAUDE_AGENT_FORK_ENABLED=1`** in `~/.claude/settings.json` env block. Anthropic shipped forked subagents in 2026-04 to solve the "design subagent loses 50k tokens of nuance" failure mode. Forks inherit full conversation history + share the prompt cache. On by default for all installs.
+- **`/qualia-design` prefers forks for batch fan-out** when the conversation contains design-taste context. Blank-context spawns still used for mechanical anti-pattern fixes.
+
+#### Operational tooling
+
+- **`hooks/git-guardrails.js`** — PreToolUse/Bash hook blocking destructive git ops universally (OWNER too): `git push --force`/`-f` to main/master, `git reset --hard` while on main/master, `git clean -fd[x]`, `git branch -D main|master`, `rm -rf .git`. `--force-with-lease` is allowed. Escape hatch: `QUALIA_ALLOW_DESTRUCTIVE=1`. Exits 2 with a clear reason and remediation suggestion. Inspired by `mattpocock/skills/git-guardrails-claude-code`.
+- **`qualia-framework doctor`** (aliases: `health`, `health-check`) — Post-install diagnostic. Critical files, all 9 hooks present, knowledge layer initialized, `settings.json` hook wiring (SessionStart + PreToolUse + PreCompact + Stop), config metadata. Exits 0 if healthy, 1 with itemized issues. Inspired by davila7/claude-code-templates' `--health-check`.
+- **`qualia-framework flush`** — Convenience CLI wrapper around `bin/knowledge-flush.js` for ad-hoc invocation. `qualia-framework flush --dry-run` previews what the next cron run would do.
 
 ### Changed
 
-- **`skills/qualia-verify/SKILL.md` body wires the new behaviors.** Adversarial pass slots in as step 2c (after the cooperative verifier + browser QA, before result presentation). Postmortem invocation lives in the FAIL branch of step 3, before the gap-closure re-plan command.
-
-### Notes
-
-This v4.3.0 phase 1 ships the **self-healing half** of the milestone. Phase 2 will add worktree-aware phase parallelism (Cole Medin's pillars 2-4 — `bin/qualia-worktree.sh`, port-from-hash, Supabase branch-per-worktree, model switching). Phase 3 will add `bin/knowledge-flush.js` (cron-runnable non-interactive flush) so the memory loop runs without a Claude session.
-
-## [Unreleased] — v4.2.0 phase 3 (flush + forks + model matrix)
-
-**Closes the Karpathy raw → wiki loop, enables forked subagents, conservative model matrix.** Final phase of the v4.2.0 "Compound" milestone. Stacks on the foundation (#9) and knowledge loader (#10).
-
-### Added
-
-- **`/qualia-flush` skill (`skills/qualia-flush/SKILL.md`).** The LLM job that closes the memory-layer loop. Reads recent `~/.claude/knowledge/daily-log/*.md` entries (default 14-day window, configurable with `--days N`), groups them by project, identifies recurring patterns/decisions across multiple sessions, and promotes the survivors via `node ~/.claude/bin/knowledge.js append --type {pattern|fix|client}`. Encodes Karpathy's raw → wiki promotion in a Qualia-shaped skill: read raw, extract durable signal, write structured. Conservative by design — false-positive promotions pollute the wiki, so single-occurrence entries stay in the raw tier until they recur. Supports `--dry-run` to preview without writing, `--project NAME` to scope to one project. Recommended cadence: weekly. (v4.3.0 will add a non-interactive `bin/knowledge-flush.js` runner so the same logic can run from cron without a Claude session.)
-- **`CLAUDE_AGENT_FORK_ENABLED=1` in `~/.claude/settings.json` env block.** Anthropic shipped forked subagents in 2026-04 specifically to solve the "design subagent loses 50k tokens of nuance" failure mode. Forks inherit the entire conversation history + share the prompt cache, so when the main session has accumulated taste discussion (font choices, palette, motion preferences), spawning a forked variant for batch work is dramatically higher-quality than a blank-context fan-out. We turn this on by default for all installs.
-- **`/qualia-design` now prefers forked subagents for batch fan-out** when the conversation contains design-taste context. Blank-context spawns are still used for mechanical anti-pattern fixes (no nuance to inherit). The skill explicitly tells Claude when to fork vs. when not to — informed by Cole Medin's NotebookLM 2026-04-25 source on the Anthropic subagent upgrade.
-
-### Changed
-
-- **`agents/research-synthesizer.md` now uses `model: haiku`.** Conservative first entry in the model-per-agent matrix recommended by Cole Medin's "model-per-node" pattern. Synthesizer is pure markdown merging — no new reasoning, just consolidating four well-structured research files. Haiku is ~7× cheaper with no observable quality loss for this work shape. **Deliberately not changed:** planner, builder, verifier, plan-checker, roadmapper, qa-browser — all retain their default (inherited) model. These are high-stakes and benefit from the upper model. Future releases may extend the matrix once we have token-usage data, but the principle stays: only switch where the work is mechanical, not where it's stakes-bearing.
+- **Hook count: 7 → 9.** Added `git-guardrails.js`, `stop-session-log.js`. New `Stop` event in `settings.json`.
+- **`/qualia-learn` rewritten to use the loader.** Duplicate detection now goes through `knowledge.js search`. Append step uses `knowledge.js append --type pattern --title ...` — no manual ID generation, no shell-escaping concerns.
+- **`/qualia-debug`, `/qualia-plan`, `/qualia-new`, `/qualia-review` migrated off hardcoded `cat`.** Five `cat ~/.claude/knowledge/*.md` calls across four skills now go through the loader. Newly-added knowledge files become reachable to every skill via the index automatically.
+- **`agents/research-synthesizer.md` uses `model: haiku`.** Conservative first entry in the model-per-agent matrix. Synthesizer is pure markdown merging — no new reasoning needed, ~7× cheaper. Other agents (planner/builder/verifier/plan-checker/roadmapper/qa-browser) retain their default model — they're stakes-bearing.
+- **`bin/install.js` initializes the knowledge layer** on first install (never overwrites existing content). The `templates/knowledge/` subdirectory is excluded from the regular templates copy to avoid double-installation.
+- **`bin/install.js` ships `knowledge.js` + `knowledge-flush.js`** to `~/.claude/bin/` alongside `state.js`/`qualia-ui.js`/`statusline.js`. `QUALIA_BIN_FILES` updated for clean uninstall.
 
 ### Fixed
 
-(none — phase 3 is purely additive)
+- **Two pre-existing test failures** in `tests/bin.test.sh` that had been broken since v3.2.0: hook-count assertion still expected 8 hooks (had been wrong for two releases), and the hook-wiring assertion still grep'd for the deleted `block-env-edit.js`. Both updated to match the v4.3.0 install state (9 hooks, no block-env-edit).
 
 ### Notes
 
-This phase 3 is the half that turns the v4.2.0 foundation from "infrastructure that captures data" into "compound system that gets smarter every week." With phases 1+2+3 merged: the Stop hook writes daily-log entries automatically; `/qualia-flush` promotes the survivors to the curated tier weekly; the loader makes them reachable to every skill via the index; the builder reads them before writing code. The Karpathy memory loop is closed.
+Cumulative tests: **+49 new passing assertions**, 2 broken tests fixed, 168/168 node tests + 78/79 bin tests + 61/68 hook tests (the 7 pre-deploy-gate + 1 erp-api-key shell failures predate this release and are tracked separately).
 
-What's deferred to v4.3.0 (separate milestone): non-interactive `bin/knowledge-flush.js` cron runner, subdirectory support in the loader so `concepts/{topic}.md` files are reachable as `knowledge.js load <topic>`, worktree-aware phase parallelism, the self-healing `/qualia-postmortem` skill, adversarial second-opinion verifier.
+What's deferred to v4.4.0: worktree-aware phase parallelism (Cole Medin's pillars 2–4 — `bin/qualia-worktree.sh`, port-from-hash, Supabase branch-per-worktree), audit cleanup (orphan skills, color drift, per-employee memory scoping — v4.1.0 findings #4, #6, #7, #8), `npm publish` post-merge.
 
-## [Unreleased] — v4.2.0 phase 2 (knowledge loader)
-
-**Unified knowledge loader + builder/skill rewiring.** Builds on the v4.2.0 foundation by introducing `bin/knowledge.js`, a single entry point for the memory layer that replaces the scattered `cat ~/.claude/knowledge/X.md` calls in skills. Directly resolves v4.1.0 audit finding #3 ("11 of 14 knowledge files are invisible to every skill") and audit finding #2 ("Builder agent never reads knowledge").
-
-### Added
-
-- **`bin/knowledge.js` — unified memory-layer loader.** Subcommands: `load <file>` (with friendly aliases: `patterns`, `fixes`, `client`, or any bare filename), `list` (table of all files with size + mtime), `search <query>` (grep across the entire knowledge tree, including `daily-log/`), `append --type <pattern|fix|client> --title <T> --body <B> [--project <P>] [--context <C>]` (replaces ad-hoc `echo >> file` patterns in `qualia-learn`), `path <file>` (absolute path resolution without read), `help`. Default invocation with no arguments prints `index.md` — the entry point. Unknown commands fall through to `load` so `knowledge.js patterns` is a valid shorthand. Every command exits 0 even when files are missing — prints a `(no entries)` stub so skills can pipe output into prompts without breaking on a fresh install.
-- **Builder agent now reads knowledge before writing code** (`agents/builder.md`). New section 2b "Load Relevant Knowledge" instructs the builder to call `node ~/.claude/bin/knowledge.js` to discover the index, then `load supabase-patterns` / `load patterns` / `load fixes` / `load client` based on the task at hand. Hardcoded `cat` is forbidden — the loader is the only sanctioned path. Closes audit finding #2 (the most-flagged miss in the v4.1.0 review).
-- **`doctor` checks `bin/knowledge.js`** alongside the other critical bin files. Stale installs that pre-date v4.2.0 phase 2 are flagged in the diagnostic with the exact reinstall command.
-
-### Changed
-
-- **`bin/install.js` copies `knowledge.js` to `~/.claude/bin/`** alongside `state.js`, `qualia-ui.js`, `statusline.js`, and chmods it executable. `QUALIA_BIN_FILES` in `bin/cli.js` updated so uninstall removes it cleanly.
-- **`/qualia-learn` rewritten to use the loader** (`skills/qualia-learn/SKILL.md`). The duplicate-detection step now calls `knowledge.js search` instead of `grep -i ... ~/.claude/knowledge/{type}.md`. The append step calls `knowledge.js append --type pattern --title ...` — no manual ID generation, no shell-escaping concerns, no risk of writing to the wrong file. The "Reading Knowledge" section now documents the loader explicitly and calls out hardcoded `cat` as the audit-flagged anti-pattern it is.
-- **`/qualia-debug`, `/qualia-plan`, `/qualia-new`, `/qualia-review` rewritten to use the loader.** Five hardcoded `cat ~/.claude/knowledge/*.md` calls across the four skills now go through `node ~/.claude/bin/knowledge.js load <alias>` or `search <query>`. Newly-added knowledge files (e.g. a future `voice-agent-patterns.md` from `/qualia-learn`) are now reachable to every skill via the index — no more invisible files.
-
-### Notes
-
-The loader is intentionally minimal: pure Node.js, zero dependencies, ~210 lines including help text. It does **not** implement the LLM-driven flush job that promotes `daily-log/*` entries into curated `concepts/` + `connections/` files — that lands in v4.2.0 phase 3 alongside the forked-subagent wiring. This release is the deterministic, mechanical layer underneath that future LLM layer.
-
-## [Unreleased] — v4.2.0 foundation
-
-**Memory-layer foundation + git guardrails + post-install diagnostic.** First slice of the v4.2.0 "Compound" milestone driven by the 2026-04-25 NotebookLM deep-dive on Anthropic's subagent upgrade, Karpathy's LLM knowledge bases, Cole Medin's parallel-worktree playbook, and the mattpocock skills directory. Lays the seed for the self-evolving memory layer that compounds across sessions.
-
-### Added
-
-- **`hooks/git-guardrails.js` — destructive-git hook (PreToolUse/Bash, applies to OWNER too).** Blocks: `git push --force` / `-f` to main/master (and any push from main/master while the current branch is main/master), `git reset --hard` while on main/master, `git clean -fd[x]`, `git branch -D main|master`, `rm -rf .git`. The safe variant `--force-with-lease` is allowed. Escape hatch: `QUALIA_ALLOW_DESTRUCTIVE=1` for genuine emergencies. Exits 2 with a clear reason and a remediation suggestion. Inspired by `mattpocock/skills/git-guardrails-claude-code` — guardrails are role-blind because force-pushing main is dangerous regardless of who you are.
-- **`hooks/stop-session-log.js` — Stop hook seeding the memory layer.** Appends one mechanical line per turn to `~/.claude/knowledge/daily-log/{YYYY-MM-DD}.md` (project, branch, phase, task counts, recent commit count, top-3 touched files). Rate-limited to one entry per 5 minutes per session, skipped entirely if there is no git activity AND no `.planning/tracking.json` progress to record. Never blocks — exits 0 even on internal failure. This is the **raw tier** of the planned Karpathy-style raw → wiki memory pipeline; v4.3.0 will add the LLM flush job that promotes daily-log entries into curated `concepts/` + `connections/` files.
-- **`templates/knowledge/agents.md` + `templates/knowledge/index.md` — Karpathy meta-doc + index entry point.** Installed once on first install (never overwrites existing user content) at `~/.claude/knowledge/`. `agents.md` describes the memory-layer architecture so subagents understand the system they're operating in (the "meta-reasoning" pattern from Karpathy's tweet + Cole Medin's implementation). `index.md` is the table-of-contents that future skills will hit first instead of catting individual files — fixes the v4.1.0 audit finding #3 ("11 of 14 knowledge files are invisible to every skill") by giving the agent a single deterministic entry point.
-- **`qualia-framework doctor` (aliases: `health`, `health-check`).** Post-install diagnostic that mirrors the spot-check run by `session-start.js` once per 24h, but on demand and with full surface coverage: critical files, all 9 hooks present, knowledge layer initialized, settings.json hook wiring complete (SessionStart + PreToolUse + PreCompact + Stop), config metadata recorded. Exits 0 if healthy, 1 with an itemized list of issues otherwise. Inspired by davila7/claude-code-templates' `--health-check`.
-
-### Changed
-
-- **`bin/install.js` wires the new hooks.** `git-guardrails.js` runs unconditionally on every Bash tool call (5s timeout, statusMessage `⬢ Checking git safety...`). `stop-session-log.js` runs on the new `Stop` hook event with a `.*` matcher. The `QUALIA_HOOK_SET` and `QUALIA_HOOK_FILES` lists in install.js + cli.js were updated so re-installs and uninstalls handle the new files cleanly. Hook count installed bumped 7 → 9 (test in `runner.js` updated accordingly).
-- **`bin/install.js` initializes the knowledge layer.** New "Knowledge layer" install section creates `~/.claude/knowledge/`, `~/.claude/knowledge/daily-log/`, and copies `templates/knowledge/{agents,index}.md` only if those exact files don't already exist on disk. Re-running the installer never overwrites accumulated user knowledge. The `templates/knowledge/` subdirectory is excluded from the regular `~/.claude/qualia-templates/` copy to avoid double-installation.
-
-### Notes
-
-This release ships the *foundation* for v4.2.0's headline feature — the self-evolving memory layer. The Stop hook starts capturing raw checkpoints today; the LLM flush job that promotes them into durable knowledge will land in v4.3.0 alongside `bin/knowledge.js` (the unified loader that replaces hardcoded `cat ~/.claude/knowledge/X.md` calls in skills, also v4.1.0 audit finding #3). The deep-dive synthesis that prompted this scope reorder lives in the conversation transcript that triggered the work — to be filed under `docs/research/2026-04-26-mastering-claude-code-notebook-synthesis.md` in a follow-up.
+For developers integrating the framework: re-run `npx qualia-framework@latest install` after this release lands to pick up the new hooks, knowledge layer, and `bin/` scripts. Existing `~/.claude/knowledge/*.md` content is preserved on reinstall.
 
 ## [4.1.1] — 2026-04-22
 
