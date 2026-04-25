@@ -860,5 +860,84 @@ else
 fi
 
 echo ""
+echo "--- v4.3.0 (loader subdirs + self-healing skills) ---"
+
+# 65. Subdirectory-qualified path: knowledge.js load concepts/foo
+TMP=$(mktmp)
+mkdir -p "$TMP/.claude/knowledge/concepts"
+echo "# Stripe checkout" > "$TMP/.claude/knowledge/concepts/stripe.md"
+EXIT=0; OUT=$(HOME="$TMP" $NODE "$KN" load concepts/stripe 2>&1) || EXIT=$?
+if [ "$EXIT" -eq 0 ] && echo "$OUT" | grep -q "Stripe checkout"; then
+  pass "load concepts/stripe → reads concepts/stripe.md"
+else
+  fail_case "subdir-qualified load" "exit=$EXIT"
+fi
+
+# 66. Bare name auto-discovers in concepts/
+TMP=$(mktmp)
+mkdir -p "$TMP/.claude/knowledge/concepts"
+echo "# Voice agent state" > "$TMP/.claude/knowledge/concepts/voice-agent-call-state.md"
+EXIT=0; OUT=$(HOME="$TMP" $NODE "$KN" load voice-agent-call-state 2>&1) || EXIT=$?
+if [ "$EXIT" -eq 0 ] && echo "$OUT" | grep -q "Voice agent state"; then
+  pass "load <bare> auto-discovers in concepts/"
+else
+  fail_case "bare-name subdir discovery" "exit=$EXIT"
+fi
+
+# 67. Top-level wins when both top-level and subdir have same filename
+TMP=$(mktmp)
+mkdir -p "$TMP/.claude/knowledge/concepts"
+echo "# Top level" > "$TMP/.claude/knowledge/foo.md"
+echo "# Subdir version" > "$TMP/.claude/knowledge/concepts/foo.md"
+EXIT=0; OUT=$(HOME="$TMP" $NODE "$KN" load foo 2>&1) || EXIT=$?
+if [ "$EXIT" -eq 0 ] && echo "$OUT" | grep -q "Top level" && ! echo "$OUT" | grep -q "Subdir version"; then
+  pass "top-level wins over subdir on bare-name lookup"
+else
+  fail_case "precedence" "exit=$EXIT"
+fi
+
+# 68. Subdir-qualified still works when top-level exists with same name
+EXIT=0; OUT=$(HOME="$TMP" $NODE "$KN" load concepts/foo 2>&1) || EXIT=$?
+if [ "$EXIT" -eq 0 ] && echo "$OUT" | grep -q "Subdir version"; then
+  pass "qualified path overrides top-level"
+else
+  fail_case "qualified override" "exit=$EXIT"
+fi
+
+# 69. Search recurses into subdirs
+TMP=$(mktmp)
+mkdir -p "$TMP/.claude/knowledge/concepts"
+echo "supabase RLS pattern" > "$TMP/.claude/knowledge/concepts/auth.md"
+EXIT=0; OUT=$(HOME="$TMP" $NODE "$KN" search RLS 2>&1) || EXIT=$?
+if [ "$EXIT" -eq 0 ] && echo "$OUT" | grep -q "concepts/auth.md"; then
+  pass "search recurses into concepts/ subdir"
+else
+  fail_case "search subdir" "exit=$EXIT"
+fi
+
+# 70. qualia-postmortem skill installs
+TMP=$(mktmp)
+echo "QS-FAWZI-01" | HOME="$TMP" $NODE "$INSTALL_JS" >/dev/null 2>&1
+if [ -f "$TMP/.claude/skills/qualia-postmortem/SKILL.md" ]; then
+  pass "qualia-postmortem skill installs"
+else
+  fail_case "qualia-postmortem skill missing"
+fi
+
+# 71. /qualia-verify skill documents --adversarial flag
+if grep -qF -- '--adversarial' "$TMP/.claude/skills/qualia-verify/SKILL.md"; then
+  pass "qualia-verify documents --adversarial flag"
+else
+  fail_case "qualia-verify missing --adversarial"
+fi
+
+# 72. /qualia-verify wires /qualia-postmortem on FAIL
+if grep -q 'qualia-postmortem' "$TMP/.claude/skills/qualia-verify/SKILL.md"; then
+  pass "qualia-verify wires /qualia-postmortem on FAIL"
+else
+  fail_case "qualia-verify missing postmortem wiring"
+fi
+
+echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="
 [ "$FAIL" -eq 0 ] && exit 0 || exit 1

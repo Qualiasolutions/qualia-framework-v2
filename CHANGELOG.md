@@ -8,6 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Note: git tags for historical versions were not retained; commit references are approximate
 > and dates reflect commit history rather than npm publish timestamps.
 
+## [Unreleased] — v4.3.0 phase 1 (self-healing + adversarial + subdir loader)
+
+**Self-healing AI layer + adversarial second-opinion verifier + loader subdirectory support.** First slice of the v4.3.0 "Parallel + Self-Healing" milestone. Stacks on the v4.2.0 phase 3 (`feat/v4.2.0-flush-and-forks`).
+
+### Added
+
+- **`/qualia-postmortem` skill (`skills/qualia-postmortem/SKILL.md`).** Cole Medin's pillar 5 — "anytime we encounter a bug in a pull request, we don't just fix the bug and move on, we fix the underlying system that allowed for the bug" (NotebookLM 2026-04-25). After a verify FAIL, this skill identifies which AI-layer file (`agents/X.md`, `rules/Y.md`, `skills/Z/SKILL.md`) should have caught the gap and proposes a surgical delta. Writes `.planning/phase-{N}-postmortem.md` for human review. With `--apply`, applies the deltas to the installed agent/rule files and flags a TODO for upstreaming to the framework repo (so the lesson survives reinstall). Promotes generalizable patterns to `~/.claude/knowledge/` via the loader's `append`. Conservative by design: max 3 deltas per postmortem to avoid the AI layer becoming a museum of edge cases. Without this loop, the same class of bug recurs phase after phase.
+- **`/qualia-verify --adversarial` flag (and auto-on for high-stakes phases).** Spawns a SECOND verifier in fresh context with an adversarial prompt — "find what's wrong, not what's right." Auto-enabled for the Handoff milestone and for any phase whose plan touches `auth|payment|migration|rls|service_role` files. The "kid grading their own homework" mitigation: a single verifier instance trained on the same rubric the planner+builder optimized against gets ~70% fewer real findings than a fresh-context adversarial pass. Findings union with the cooperative pass; either pass finding CRITICAL or HIGH = phase FAIL.
+- **`/qualia-verify` auto-invokes `/qualia-postmortem` on FAIL** (before the gap-closure re-plan). The next planner spawn benefits from any AI-layer deltas the user accepted from the postmortem report. Without `--apply`, the postmortem just writes the report; nothing destructive happens automatically.
+- **Loader subdirectory support (`bin/knowledge.js`).** Resolves the v4.2.0 phase 3 caveat that `concepts/{topic}.md` files were unreachable as bare names. Three new resolution modes: (1) subdirectory-qualified paths like `knowledge.js load concepts/stripe-checkout` work natively; (2) bare-name lookups auto-discover files in `concepts/`, `connections/`, and `daily-log/` if no top-level match exists; (3) top-level wins on filename collision (predictable precedence, qualifier overrides). `/qualia-flush` can now write to `concepts/` and skills can `load <topic>` without knowing the layout.
+
+### Changed
+
+- **`skills/qualia-verify/SKILL.md` body wires the new behaviors.** Adversarial pass slots in as step 2c (after the cooperative verifier + browser QA, before result presentation). Postmortem invocation lives in the FAIL branch of step 3, before the gap-closure re-plan command.
+
+### Notes
+
+This v4.3.0 phase 1 ships the **self-healing half** of the milestone. Phase 2 will add worktree-aware phase parallelism (Cole Medin's pillars 2-4 — `bin/qualia-worktree.sh`, port-from-hash, Supabase branch-per-worktree, model switching). Phase 3 will add `bin/knowledge-flush.js` (cron-runnable non-interactive flush) so the memory loop runs without a Claude session.
+
 ## [Unreleased] — v4.2.0 phase 3 (flush + forks + model matrix)
 
 **Closes the Karpathy raw → wiki loop, enables forked subagents, conservative model matrix.** Final phase of the v4.2.0 "Compound" milestone. Stacks on the foundation (#9) and knowledge loader (#10).
