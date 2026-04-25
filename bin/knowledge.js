@@ -58,16 +58,43 @@ function readSafe(p) {
 }
 
 // Look up a knowledge file by friendly name. Accepts: "index", "index.md",
-// "patterns" (alias), "fixes" (alias), or a literal filename. Returns the
-// resolved absolute path (may not exist).
+// "patterns" (alias), "fixes" (alias), a bare filename, a subdirectory-
+// qualified path like "concepts/stripe-checkout", or a name that exists
+// inside a known subdirectory. Returns the resolved absolute path (may
+// not exist on disk).
+//
+// Resolution order:
+//   1. "index" / "index.md" → top-level index.md
+//   2. Known type alias (pattern|fix|client) → mapped top-level filename
+//   3. Path with "/" → treat as relative to knowledge dir (concepts/foo)
+//   4. Bare name → look in top-level first; if missing, search known
+//      subdirectories (concepts/, daily-log/) for an exact match. This
+//      means /qualia-flush can write to concepts/voice-agent-call-state.md
+//      and skills can later run `knowledge.js load voice-agent-call-state`
+//      without knowing it lives in a subdirectory.
 function resolveFile(name) {
   if (!name || name === "index" || name === "index.md") return INDEX_FILE;
-  if (TYPE_TO_FILE[name.toLowerCase()]) {
-    return path.join(KNOWLEDGE_DIR, TYPE_TO_FILE[name.toLowerCase()]);
+  const lower = name.toLowerCase();
+  if (TYPE_TO_FILE[lower]) {
+    return path.join(KNOWLEDGE_DIR, TYPE_TO_FILE[lower]);
   }
-  // Allow bare filenames like "supabase-patterns.md" or "supabase-patterns".
   const withExt = name.endsWith(".md") ? name : `${name}.md`;
-  return path.join(KNOWLEDGE_DIR, withExt);
+  // Subdirectory-qualified path: concepts/foo, daily-log/2026-04-26
+  if (withExt.includes("/") || withExt.includes(path.sep)) {
+    return path.join(KNOWLEDGE_DIR, withExt);
+  }
+  // Top-level wins if it exists.
+  const topLevel = path.join(KNOWLEDGE_DIR, withExt);
+  if (fs.existsSync(topLevel)) return topLevel;
+  // Otherwise search known subdirectories. Stop at the first match — if
+  // multiple subdirs have the same filename, the user should qualify.
+  const KNOWN_SUBDIRS = ["concepts", "connections", "daily-log"];
+  for (const sub of KNOWN_SUBDIRS) {
+    const candidate = path.join(KNOWLEDGE_DIR, sub, withExt);
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  // Fall back to top-level (will trigger the "no entries" stub on read).
+  return topLevel;
 }
 
 function cmdLoad(arg) {

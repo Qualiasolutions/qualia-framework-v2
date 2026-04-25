@@ -19,6 +19,7 @@ Spawn a verifier agent to check if the phase goal was achieved. Does NOT trust b
 `/qualia-verify` — verify the current built phase
 `/qualia-verify {N}` — verify specific phase
 `/qualia-verify {N} --auto` — verify + auto-chain: PASS → next phase (or milestone close); FAIL → gap closure; gap limit → halt with escalation
+`/qualia-verify {N} --adversarial` — run a SECOND verifier in fresh context with an adversarial prompt ("find what's wrong, not what's right"). Union the findings. Recommended for high-stakes phases (Handoff milestone, payment/auth/migration code) where a biased single-pass review would silently approve a bad change. v4.3.0+.
 
 ## Process
 
@@ -80,6 +81,52 @@ Drive the running dev server and test the routes this phase touched. Append a '#
 
 Wait for both the main verifier and the QA browser agent before moving to step 3. If Playwright MCP is unavailable, the QA browser agent returns BLOCKED — that's not a phase failure, just a note in the report.
 
+### 2c. Adversarial Second Opinion (--adversarial flag, optional)
+
+When `--adversarial` is in the args, OR when the current milestone is
+`Handoff` OR the phase plan touches files matching `auth|payment|migration|rls|service_role`, spawn a SECOND verifier in fresh context with an
+adversarial prompt. This is the "kid-grading-their-own-homework"
+mitigation — a single verifier instance trained on the same rubric the
+planner+builder optimized against gets ~70% fewer real findings than a
+fresh-context adversarial pass (Cole Medin, NotebookLM 2026-04-25, citing
+PR-acceptance studies).
+
+```bash
+node ~/.claude/bin/qualia-ui.js spawn verifier "Adversarial pass — find what's wrong"
+```
+
+```
+Agent(prompt="
+Read your role: @~/.claude/agents/verifier.md
+Grounding + rubrics: @~/.claude/rules/grounding.md
+
+You are an ADVERSARIAL reviewer. Your job is to find what's WRONG with
+this phase, not to confirm it works. Assume the previous verifier missed
+something. Use the same Severity Rubric, the same evidence-citation
+requirement, but bias your search toward edge cases the cooperative
+verifier would skip:
+  • What untested error path exists?
+  • What input would crash this?
+  • What concurrent access pattern is unhandled?
+  • What downstream consumer breaks if this contract changes?
+  • Where is a security assumption (auth, RLS, secrets) implicit
+    instead of enforced?
+
+Project conventions: @.planning/PROJECT.md
+Phase plan: @.planning/phase-{N}-plan.md
+Cooperative verifier's report (do NOT re-find what they found, find
+what they MISSED): @.planning/phase-{N}-verification.md
+
+Append a '## Adversarial Findings' section to the verification file.
+Empty section is fine if you genuinely found nothing — better that than
+inventing findings to look productive.
+", subagent_type="qualia-verifier", description="Adversarial verify phase {N}")
+```
+
+Findings from the adversarial pass merge into the main verification
+report. The combined PASS/FAIL is the union: if either pass found a
+CRITICAL or HIGH gap, the phase is FAIL.
+
 ### 3. Present Results
 
 Read the verification report. Present:
@@ -100,6 +147,19 @@ node ~/.claude/bin/qualia-ui.js fail "Failed: {fail_count}"
 Then for each gap:
 ```bash
 node ~/.claude/bin/qualia-ui.js fail "{gap description}"
+```
+
+**Self-healing layer (v4.3.0+):** before re-planning the gaps, run a
+postmortem so the framework itself learns from the miss. This is Cole
+Medin's pillar 5: don't just fix the bug, fix the AI-layer file that
+should have caught it. The postmortem writes a report to
+`.planning/phase-{N}-postmortem.md` for review — it does NOT auto-apply
+deltas to agents/rules unless the user runs `/qualia-postmortem --apply`
+explicitly. Without this loop, the same class of bug ships in PR-3, PR-7,
+PR-11 of the next project.
+
+```
+/qualia-postmortem --phase {N}
 ```
 
 End:
